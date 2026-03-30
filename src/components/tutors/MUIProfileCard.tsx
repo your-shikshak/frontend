@@ -10,6 +10,7 @@ import { getMyProfile, uploadDocument, getTutorById, updateVerificationFeeStatus
 import { useAuth } from '../../hooks/useAuth';
 import { useEffect, useState, useMemo } from 'react';
 import DocumentViewerModal from '../common/DocumentViewerModal';
+import { useNavigate } from 'react-router-dom';
 import { useOptions } from '../../hooks/useOptions';
 
 
@@ -66,6 +67,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     fetchProfile();
   }, [tutorId]);
 
+  const navigate = useNavigate();
   const { options: subjectOptions } = useOptions('SUBJECT');
 
   const formatSubjectLabel = (subject: any) => {
@@ -816,9 +818,28 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 Compliance Repository
               </h3>
               <div className="flex flex-wrap gap-2">
-                {tutor.verificationStatus === 'VERIFIED' && (
+                {/* Start Verification Button - Show only for non-verified tutors viewing their own profile */}
+                {isTutorSelf && tutor.verificationStatus !== 'VERIFIED' && tutor.verificationStatus !== 'UNDER_REVIEW' && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={() => navigate('/tutor-verification-form')}
+                    sx={{
+                      borderRadius: '12px',
+                      textTransform: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.75rem',
+                      bgcolor: '#6366f1',
+                      '&:hover': { bgcolor: '#4f46e5' },
+                      px: 2.5,
+                    }}
+                  >
+                    Start Verification
+                  </Button>
+                )}
+                {(tutor.verificationStatus === 'VERIFIED' || tutor.verificationStatus === 'UNDER_REVIEW') && (
                   <span className="flex items-center gap-2 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-full uppercase tracking-wider">
-                    <ShieldCheck size={14} /> Documents Encrypted & Locked
+                    <ShieldCheck size={14} /> {tutor.verificationStatus === 'VERIFIED' ? 'Documents Encrypted & Locked' : 'Verification Submitted'}
                   </span>
                 )}
                 {tutor.verificationFeeStatus === 'PAID' && (

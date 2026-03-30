@@ -301,7 +301,11 @@ export default function ClassLeadDetailPage() {
           ? 'Other'
           : 'No Preferrence';
 
-    const fees = r.paymentAmount != null ? `₹${Number(r.paymentAmount).toLocaleString()}` : '';
+    const fees = r.tutorFees != null 
+      ? `₹${Number(r.tutorFees).toLocaleString()}` 
+      : r.paymentAmount != null 
+        ? `₹${Number(r.paymentAmount).toLocaleString()}` 
+        : '';
 
     const weekdays = Array.isArray(r.weekdays) ? r.weekdays.filter(Boolean) : [];
     const daysPerWeek = weekdays.length > 0 ? `${weekdays.length} days/week` : '';
