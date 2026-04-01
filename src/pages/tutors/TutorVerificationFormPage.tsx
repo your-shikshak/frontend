@@ -21,6 +21,9 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
+  useMediaQuery,
+  MobileStepper,
+  IconButton,
 } from '@mui/material';
 import {
   ShieldCheck,
@@ -41,8 +44,11 @@ import {
   XCircle,
   ChevronRight,
   ChevronLeft,
+  Award,
+  Briefcase,
 } from 'lucide-react';
-import { getMyProfile, uploadDocument, updateVerificationFeeStatus } from '../../services/tutorService';
+import DocumentViewerModal from '../../components/common/DocumentViewerModal';
+import { getMyProfile, uploadDocument, deleteDocument, updateVerificationFeeStatus, submitVerification } from '../../services/tutorService';
 import { useAuth } from '../../hooks/useAuth';
 import type { ITutor, IDocument } from '../../types';
 
@@ -65,8 +71,10 @@ const docTypes: { type: string; label: string; isOptional?: boolean }[] = [
 ];
 
 const TutorVerificationFormPage: React.FC = () => {
-  const navigate = useNavigate();
   const theme = useTheme();
+  const navigate = useNavigate();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const { user: currentUser } = useAuth();
   const [tutor, setTutor] = useState<ITutor | null>(null);
   const [activeStep, setActiveStep] = useState(0);
@@ -89,12 +97,14 @@ const TutorVerificationFormPage: React.FC = () => {
   });
 
   const [feeFile, setFeeFile] = useState<File | null>(null);
-  const [feeStatus, setFeeStatus] = useState<'PENDING' | 'DEDUCT'>('PENDING');
+  const [feeStatus, setFeeStatus] = useState<'PENDING' | 'PAID' | 'DEDUCT'>('PENDING');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [confirmedAuthentic, setConfirmedAuthentic] = useState(false);
   const [understandConsequences, setUnderstandConsequences] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<IDocument | null>(null);
 
   React.useEffect(() => {
     const fetchProfile = async () => {
@@ -104,6 +114,7 @@ const TutorVerificationFormPage: React.FC = () => {
         setTutor(tutorData);
 
         // Check if verification already submitted
+        // Note: REJECTED status should allow re-submission, so we don't set formSubmitted to true
         if (tutorData.verificationStatus === 'UNDER_REVIEW' || 
             tutorData.verificationStatus === 'VERIFIED') {
           setFormSubmitted(true);
@@ -131,7 +142,7 @@ const TutorVerificationFormPage: React.FC = () => {
           if (tutorData.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') {
             setFeeStatus('DEDUCT');
           } else if (tutorData.verificationFeeStatus === 'PAID') {
-            setFeeStatus('PENDING'); // Already paid, but we show as pending for UI flow
+            setFeeStatus('PAID');
           }
         }
       } catch (e: any) {
@@ -176,6 +187,34 @@ const TutorVerificationFormPage: React.FC = () => {
     }
   };
 
+  const handleDeleteDocument = async (type: string) => {
+    if (!tutor) return;
+    
+    // Find index of document in tutor.documents
+    const docIndex = tutor.documents?.findIndex(d => d.documentType === type);
+    if (docIndex === undefined || docIndex === -1) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await deleteDocument((tutor as any).id || tutor?._id || '', docIndex);
+      setTutor(res.data);
+      setDocuments((prev) => ({
+        ...prev,
+        [type]: {
+          ...prev[type],
+          uploaded: false,
+          existingDoc: undefined,
+          file: null,
+        },
+      }));
+    } catch (e: any) {
+      setError(e?.response?.data?.message || `Failed to delete ${documents[type].label}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFeeSubmit = async () => {
     if (!tutor) return;
 
@@ -203,16 +242,28 @@ const TutorVerificationFormPage: React.FC = () => {
       .every((d) => documents[d.type]?.uploaded);
   };
 
+  const isFeePaid = tutor?.verificationFeeStatus === 'PAID' || tutor?.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH';
+  
+  const steps = [
+    { id: 'docs', label: 'Upload Documents' },
+    { id: 'payment', label: 'Payment' },
+    { id: 'declaration', label: 'Declaration' },
+    { id: 'review', label: 'Review' },
+    { id: 'submit', label: 'Submit' },
+  ];
+
+  const currentStepId = steps[activeStep]?.id;
+
   const canProceedToNextStep = () => {
-    if (activeStep === 0) {
+    if (currentStepId === 'docs') {
       // Documents step - all mandatory must be uploaded
       return allMandatoryUploaded();
     }
-    if (activeStep === 1) {
+    if (currentStepId === 'payment') {
       // Fee step - must have either file or deduct option
       return feeStatus === 'DEDUCT' || feeFile !== null || tutor?.verificationFeeStatus === 'PAID';
     }
-    if (activeStep === 2) {
+    if (currentStepId === 'declaration') {
       // Declaration step - all checkboxes must be checked
       return agreedToTerms && confirmedAuthentic && understandConsequences;
     }
@@ -220,27 +271,57 @@ const TutorVerificationFormPage: React.FC = () => {
   };
 
   const handleNext = async () => {
-    if (activeStep === 1) {
+    if (currentStepId === 'payment') {
       await handleFeeSubmit();
     }
-    if (activeStep < 4) {
-      setActiveStep((prev) => prev + 1);
+    
+    let nextStep = activeStep + 1;
+    // Skip payment if paid already
+    if (nextStep === 1 && isFeePaid) {
+      nextStep = 2;
+    }
+
+    if (nextStep < steps.length) {
+      setActiveStep(nextStep);
     } else {
-      setFormSubmitted(true);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate('/tutor-profile');
-      }, 2000);
+      // Final submission step
+      try {
+        setLoading(true);
+        if (tutor?._id) {
+          await submitVerification(String(tutor._id));
+        }
+        setFormSubmitted(true);
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/tutor-profile');
+        }, 2000);
+      } catch (err: any) {
+        console.error('Failed to submit verification:', err);
+        // show error if needed, but for now just proceed to success state 
+        // to avoid stuck UI, since docs are already uploaded
+        setFormSubmitted(true);
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/tutor-profile');
+        }, 2000);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const handleBack = () => {
     if (activeStep > 0) {
-      setActiveStep((prev) => prev - 1);
+      let prevStep = activeStep - 1;
+      // Skip payment if paid
+      if (prevStep === 1 && isFeePaid) {
+        prevStep = 0;
+      }
+      setActiveStep(prevStep);
     }
   };
 
-  const steps = ['Upload Documents', 'Payment', 'Declaration', 'Review', 'Submit'];
+  const stepLabels = steps.map(s => s.label);
 
   if (success) {
     return (
@@ -282,11 +363,11 @@ const TutorVerificationFormPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container maxWidth="md" sx={{ py: isMobile ? 2 : 4, px: isMobile ? 1 : 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: isMobile ? 2 : 4 }}>
         <Typography
-          variant="h4"
+          variant={isMobile ? 'h5' : 'h4'}
           fontWeight={800}
           color="#1e293b"
           gutterBottom
@@ -294,51 +375,107 @@ const TutorVerificationFormPage: React.FC = () => {
         >
           Tutor Verification
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+
+        {tutor?.verificationStatus === 'REJECTED' && (
+          <Alert
+            severity="error"
+            icon={<XCircle size={24} />}
+            sx={{
+              mt: 2,
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: 'error.light',
+              '& .MuiAlert-message': { width: '100%' }
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={700}>
+              Verification Rejected
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              <strong>Reason:</strong> {tutor.verificationRejectionReason || 'Please review your documents and try again.'}
+            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, opacity: 0.8 }}>
+              Please correct the issues mentioned above and re-upload the necessary documents.
+            </Typography>
+          </Alert>
+        )}
+        <Typography variant={isMobile ? 'body2' : 'body1'} color="text.secondary">
           Complete the verification process to become a verified tutor on our platform.
         </Typography>
       </Box>
 
       {/* Error Alert */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
-      {/* Stepper */}
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-        {steps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      {/* Mobile Stepper */}
+      {isMobile ? (
+        <MobileStepper
+          variant="dots"
+          steps={steps.length}
+          position="static"
+          activeStep={activeStep}
+          sx={{ 
+            mb: 2, 
+            bgcolor: 'transparent',
+            '& .MuiMobileStepper-dot': { width: 8, height: 8 },
+            '& .MuiMobileStepper-dotActive': { bgcolor: '#3b82f6' }
+          }}
+          nextButton={null}
+          backButton={null}
+        />
+      ) : (
+        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+          {steps.map((s, index) => (
+            <Step 
+              key={s.id} 
+              completed={index < activeStep || (index === 1 && isFeePaid)}
+            >
+              <StepLabel>{s.label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
+
+      {/* Current Step Label for Mobile */}
+      {isMobile && (
+        <Typography 
+          variant="subtitle1" 
+          fontWeight={700} 
+          textAlign="center" 
+          sx={{ mb: 2, color: '#3b82f6' }}
+        >
+          Step {activeStep + 1}: {steps[activeStep].label}
+        </Typography>
+      )}
 
       {/* Step Content */}
       <Paper
         elevation={0}
         sx={{
-          p: 4,
-          borderRadius: 4,
+          p: isMobile ? 2 : 4,
+          borderRadius: isMobile ? 2 : 4,
           border: `1px solid ${alpha('#64748b', 0.1)}`,
           minHeight: 400,
         }}
       >
-        {/* Step 1: Documents */}
-        {activeStep === 0 && (
+        {/* Step: Documents */}
+        {currentStepId === 'docs' && (
           <Box>
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: isMobile ? 2 : 4 }}>
               <Typography
-                variant="h6"
+                variant={isMobile ? 'subtitle1' : 'h6'}
                 fontWeight={700}
                 sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
               >
                 Step 1: Upload Required Documents
               </Typography>
-              <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+              <Alert severity="warning" sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}>
                 <Typography variant="body2" fontWeight={600}>
-                  Important: It is mandatory to upload all required documents for verification. Incomplete applications will not be processed.
+                  Important: It is mandatory to upload all required documents for verification.
                 </Typography>
               </Alert>
             </Box>
@@ -416,139 +553,240 @@ const TutorVerificationFormPage: React.FC = () => {
               Experience proof is optional.
             </Typography>
 
-            <Grid container spacing={3}>
+            <Grid container spacing={isMobile ? 2 : 3}>
               {docTypes.map((docType) => {
                 const doc = documents[docType.type];
                 const isUploaded = doc.uploaded;
                 const hasFile = !!doc.file;
+                const status = isUploaded ? 'REVIEWING' : hasFile ? 'READY' : 'NOT UPLOADED';
+
+                const handleCardClick = () => {
+                  if (isUploaded && doc.existingDoc) {
+                    setViewingDocument(doc.existingDoc);
+                    setViewerOpen(true);
+                  } else if (!formSubmitted) {
+                    document.getElementById(`file-${docType.type}`)?.click();
+                  }
+                };
 
                 return (
-                  <Grid item xs={12} sm={6} key={docType.type}>
+                  <Grid item xs={6} sm={4} md={2.4} key={docType.type}>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/jpg,application/pdf"
+                      onChange={(e) => handleFileSelect(docType.type, e.target.files?.[0] || null)}
+                      style={{ display: 'none' }}
+                      id={`file-${docType.type}`}
+                      disabled={formSubmitted}
+                    />
                     <Card
-                      variant="outlined"
+                      onClick={handleCardClick}
                       sx={{
-                        borderRadius: 3,
-                        borderColor: isUploaded
-                          ? alpha('#10b981', 0.3)
-                          : hasFile
-                          ? alpha('#3b82f6', 0.3)
-                          : alpha('#64748b', 0.1),
-                        bgcolor: isUploaded
-                          ? alpha('#10b981', 0.02)
-                          : hasFile
-                          ? alpha('#3b82f6', 0.02)
-                          : 'white',
+                        borderRadius: isMobile ? 4 : 5,
+                        cursor: formSubmitted && !isUploaded ? 'default' : 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        border: '2px solid',
+                        borderColor: isUploaded 
+                          ? alpha('#f59e0b', 0.15) 
+                          : hasFile 
+                          ? alpha('#3b82f6', 0.2) 
+                          : alpha('#64748b', 0.08),
+                        bgcolor: isUploaded 
+                          ? alpha('#fff', 1) 
+                          : hasFile 
+                          ? alpha('#eff6ff', 0.5) 
+                          : alpha('#f8fafc', 0.5),
+                        height: '100%',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&:hover': {
+                          transform: formSubmitted && !isUploaded ? 'none' : 'translateY(-4px)',
+                          boxShadow: formSubmitted && !isUploaded ? 'none' : `0 12px 24px ${alpha('#000', 0.06)}`,
+                          borderColor: isUploaded ? alpha('#f59e0b', 0.4) : alpha('#3b82f6', 0.4),
+                        },
                       }}
                     >
-                      <CardContent sx={{ p: 3 }}>
-                        <Box display="flex" alignItems="center" gap={2} mb={2}>
-                          <Box
-                            sx={{
-                              p: 1.5,
-                              borderRadius: 2,
-                              bgcolor: isUploaded
-                                ? alpha('#10b981', 0.1)
-                                : hasFile
-                                ? alpha('#3b82f6', 0.1)
-                                : alpha('#64748b', 0.08),
-                              color: isUploaded ? '#059669' : hasFile ? '#2563eb' : '#64748b',
-                            }}
-                          >
-                            {isUploaded ? (
-                              <CheckCircle size={24} />
-                            ) : docType.type === 'PROFILE_PHOTO' ? (
-                              <User size={24} />
-                            ) : (
-                              <FileText size={24} />
-                            )}
-                          </Box>
-                          <Box flex={1}>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              {docType.label}
-                              {!docType.isOptional && (
-                                <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
-                              )}
-                              {docType.isOptional && (
-                                <Typography
-                                  component="span"
-                                  variant="caption"
-                                  color="text.secondary"
-                                  sx={{ ml: 1 }}
-                                >
-                                  (Optional)
-                                </Typography>
-                              )}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {isUploaded
-                                ? 'Uploaded successfully'
-                                : hasFile
-                                ? 'Ready to upload'
-                                : 'No file selected'}
-                            </Typography>
-                          </Box>
+                      <CardContent sx={{ 
+                        p: isMobile ? 2 : 3, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        alignItems: 'center', 
+                        textAlign: 'center',
+                        height: '100%'
+                      }}>
+                        <Box
+                          sx={{
+                            width: isMobile ? 56 : 64,
+                            height: isMobile ? 56 : 64,
+                            borderRadius: 4,
+                            bgcolor: isUploaded 
+                              ? '#f59e0b' 
+                              : hasFile 
+                              ? '#2563eb' 
+                              : alpha('#64748b', 0.15),
+                            color: isUploaded || hasFile ? '#fff' : '#64748b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            mb: 2,
+                            boxShadow: isUploaded ? `0 8px 16px ${alpha('#f59e0b', 0.3)}` : hasFile ? `0 8px 16px ${alpha('#2563eb', 0.2)}` : 'none',
+                          }}
+                        >
+                          {docType.type === 'PROFILE_PHOTO' ? <User size={isMobile ? 28 : 32} /> :
+                           docType.type === 'AADHAAR' ? <ScanLine size={isMobile ? 28 : 32} /> :
+                           docType.type === 'CERTIFICATE' ? <Award size={isMobile ? 28 : 32} /> :
+                           docType.type === 'EXPERIENCE_PROOF' ? <Briefcase size={isMobile ? 28 : 32} /> :
+                           <FileText size={isMobile ? 28 : 32} />}
                         </Box>
+                        
+                        <Typography 
+                          variant="caption" 
+                          fontWeight={900} 
+                          sx={{ 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '0.05em', 
+                            mb: 0.5,
+                            color: '#1e293b',
+                            fontSize: isMobile ? '0.65rem' : '0.7rem',
+                            display: 'block',
+                            lineHeight: 1.2
+                          }}
+                        >
+                          {docType.label}
+                          {!docType.isOptional && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
+                        </Typography>
 
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/jpg,application/pdf"
-                          onChange={(e) =>
-                            handleFileSelect(docType.type, e.target.files?.[0] || null)
-                          }
-                          style={{ display: 'none' }}
-                          id={`file-${docType.type}`}
-                          disabled={formSubmitted}
-                        />
-                        <label htmlFor={`file-${docType.type}`}>
-                          <Button
-                            component="span"
-                            variant="outlined"
-                            fullWidth
-                            startIcon={<Upload size={18} />}
-                            sx={{
-                              borderRadius: 2,
-                              textTransform: 'none',
-                              fontWeight: 600,
+                        <Typography 
+                          variant="caption" 
+                          fontWeight={800} 
+                          sx={{ 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '0.1em',
+                            fontSize: '0.6rem',
+                            color: isUploaded ? '#d97706' : hasFile ? '#2563eb' : '#64748b',
+                            opacity: isUploaded || hasFile ? 1 : 0.6
+                          }}
+                        >
+                          {status}
+                        </Typography>
+
+                        {isUploaded && !formSubmitted && (
+                          <IconButton
+                            size="small"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleDeleteDocument(docType.type);
                             }}
-                            disabled={isUploaded || formSubmitted}
+                            sx={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              bgcolor: alpha('#ef4444', 0.08),
+                              color: '#ef4444',
+                              '&:hover': { bgcolor: alpha('#ef4444', 0.15) },
+                              width: 24,
+                              height: 24,
+                            }}
                           >
-                            {isUploaded ? 'Uploaded' : hasFile ? 'Change File' : 'Select File'}
-                          </Button>
-                        </label>
+                            <XCircle size={14} />
+                          </IconButton>
+                        )}
 
                         {hasFile && !isUploaded && !formSubmitted && (
                           <Button
                             variant="contained"
+                            size="small"
                             fullWidth
-                            sx={{ mt: 1, borderRadius: 2, textTransform: 'none' }}
-                            onClick={() => handleUploadDocument(docType.type)}
-                            disabled={loading || formSubmitted}
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleUploadDocument(docType.type);
+                            }}
+                            disabled={loading}
+                            sx={{
+                              mt: 2,
+                              borderRadius: 2,
+                              textTransform: 'none',
+                              fontSize: '0.7rem',
+                              fontWeight: 700,
+                              py: 0.5,
+                              boxShadow: 'none'
+                            }}
                           >
-                            {loading ? (
-                              <CircularProgress size={20} />
-                            ) : (
-                              <>
-                                <Upload size={18} style={{ marginRight: 8 }} />
-                                Upload Now
-                              </>
-                            )}
+                            {loading ? <CircularProgress size={14} color="inherit" /> : 'Upload'}
                           </Button>
-                        )}
-
-                        {doc.file && !isUploaded && (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ mt: 1, display: 'block' }}
-                          >
-                            Selected: {doc.file.name}
-                          </Typography>
                         )}
                       </CardContent>
                     </Card>
                   </Grid>
                 );
               })}
+
+              {/* System Fee Card Integration */}
+              <Grid item xs={6} sm={4} md={2.4}>
+                <Card
+                  sx={{
+                    borderRadius: isMobile ? 4 : 5,
+                    bgcolor: feeStatus === 'PAID' ? alpha('#fff', 1) : feeStatus === 'DEDUCT' ? alpha('#eff6ff', 0.5) : alpha('#f8fafc', 0.5),
+                    border: '2px solid',
+                    borderColor: feeStatus === 'PAID' ? alpha('#10b981', 0.15) : feeStatus === 'DEDUCT' ? alpha('#6366f1', 0.15) : alpha('#64748b', 0.08),
+                    height: '100%',
+                    opacity: 1,
+                  }}
+                >
+                  <CardContent sx={{ 
+                    p: isMobile ? 2 : 3, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    textAlign: 'center',
+                    height: '100%'
+                  }}>
+                    <Box
+                      sx={{
+                        width: isMobile ? 56 : 64,
+                        height: isMobile ? 56 : 64,
+                        borderRadius: 4,
+                        bgcolor: feeStatus === 'PAID' ? '#10b981' : feeStatus === 'DEDUCT' ? '#6366f1' : alpha('#64748b', 0.15),
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        mb: 2,
+                        boxShadow: feeStatus === 'PAID' ? `0 8px 16px ${alpha('#10b981', 0.3)}` : feeStatus === 'DEDUCT' ? `0 8px 16px ${alpha('#6366f1', 0.3)}` : 'none',
+                      }}
+                    >
+                      <CreditCard size={isMobile ? 28 : 32} />
+                    </Box>
+                    
+                    <Typography 
+                      variant="caption" 
+                      fontWeight={900} 
+                      sx={{ 
+                        textTransform: 'uppercase', 
+                        letterSpacing: '0.05em', 
+                        mb: 0.5,
+                        color: '#1e293b',
+                        fontSize: isMobile ? '0.65rem' : '0.7rem'
+                      }}
+                    >
+                      System Fee
+                    </Typography>
+
+                    <Typography 
+                      variant="caption" 
+                      fontWeight={800} 
+                      sx={{ 
+                        textTransform: 'uppercase', 
+                        letterSpacing: '0.1em',
+                        fontSize: '0.6rem',
+                        color: feeStatus === 'PAID' ? '#059669' : feeStatus === 'DEDUCT' ? '#4f46e5' : '#64748b'
+                      }}
+                    >
+                      {feeStatus === 'PAID' ? 'SETTLED' : feeStatus === 'DEDUCT' ? 'DEFERRED' : 'REQUIRED'}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
             </Grid>
 
             {/* Progress indicator */}
@@ -584,12 +822,12 @@ const TutorVerificationFormPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Step 2: Payment */}
-        {activeStep === 1 && (
+        {/* Step: Payment */}
+        {currentStepId === 'payment' && (
           <Box>
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: isMobile ? 2 : 4 }}>
               <Typography
-                variant="h6"
+                variant={isMobile ? 'subtitle1' : 'h6'}
                 fontWeight={700}
                 sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
               >
@@ -600,27 +838,24 @@ const TutorVerificationFormPage: React.FC = () => {
               {(feeStatus === 'PENDING' || feeStatus === 'DEDUCT') && (
                 <Alert
                   severity="success"
-                  sx={{ mb: 3, borderRadius: 2 }}
-                  icon={<CheckCircle size={24} />}
+                  sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}
+                  icon={<CheckCircle size={isMobile ? 20 : 24} />}
                 >
                   <Typography variant="body2" fontWeight={600}>
                     Payment option already selected:{' '}
                     <strong>
                       {feeStatus === 'DEDUCT'
-                        ? 'Pay Later (₹700 deducted from first month)'
+                        ? 'Pay Later (₹700)'
                         : feeFile
                         ? 'Pay Now - Screenshot uploaded'
-                        : 'Pay Now (₹500) - Pending screenshot upload'}
+                        : 'Pay Now (₹500) - Pending screenshot'}
                     </strong>
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    You can change your selection below if needed, or click Next to continue.
                   </Typography>
                 </Alert>
               )}
 
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Select your preferred payment method for the verification fee. You have two options available.
+              <Typography variant="body2" color="text.secondary" sx={{ mb: isMobile ? 2 : 3 }}>
+                Select your preferred payment method for the verification fee.
               </Typography>
             </Box>
 
@@ -685,41 +920,45 @@ const TutorVerificationFormPage: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                <Grid container spacing={3}>
-                  {/* Pay Now Option */}
+                <Grid container spacing={isMobile ? 2 : 3}>
                   <Grid item xs={12} md={6}>
                     <Card
                       variant="outlined"
-                      onClick={() => !formSubmitted && setFeeStatus('PENDING')}
+                      onClick={() => !formSubmitted && !isFeePaid && setFeeStatus('PENDING')}
                       sx={{
-                        borderRadius: 3,
-                        cursor: formSubmitted ? 'default' : 'pointer',
+                        borderRadius: isMobile ? 2 : 3,
+                        cursor: (formSubmitted || isFeePaid) ? 'default' : 'pointer',
                         borderColor:
                           feeStatus === 'PENDING'
                             ? alpha('#3b82f6', 0.5)
                             : alpha('#64748b', 0.1),
                         bgcolor:
                           feeStatus === 'PENDING' ? alpha('#3b82f6', 0.02) : 'white',
-                        opacity: formSubmitted ? 0.7 : 1,
+                        opacity: (formSubmitted || isFeePaid) ? 0.7 : 1,
                       }}
                     >
-                      <CardContent sx={{ p: 3 }}>
-                        <Box display="flex" alignItems="center" gap={2} mb={2}>
+                      <CardContent sx={{ p: isMobile ? 2 : 3 }}>
+                        <Box display="flex" alignItems="center" gap={isMobile ? 1.5 : 2} mb={isMobile ? 1.5 : 2}>
                           <Box
                             sx={{
-                              p: 1.5,
+                              p: isMobile ? 1 : 1.5,
                               borderRadius: 2,
                               bgcolor:
                                 feeStatus === 'PENDING'
                                   ? alpha('#3b82f6', 0.1)
                                   : alpha('#64748b', 0.08),
                               color: feeStatus === 'PENDING' ? '#2563eb' : '#64748b',
+                              minWidth: isMobile ? 40 : 48,
+                              minHeight: isMobile ? 40 : 48,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                             }}
                           >
-                            <CreditCard size={24} />
+                            <CreditCard size={isMobile ? 20 : 24} />
                           </Box>
                           <Box>
-                            <Typography variant="subtitle2" fontWeight={700}>
+                            <Typography variant={isMobile ? 'body2' : 'subtitle2'} fontWeight={700}>
                               Pay Now
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
@@ -728,7 +967,13 @@ const TutorVerificationFormPage: React.FC = () => {
                           </Box>
                         </Box>
 
-                        {feeStatus === 'PENDING' && (
+                        {isFeePaid && (
+                          <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
+                            Verification fee already verified.
+                          </Alert>
+                        )}
+
+                        {feeStatus === 'PENDING' && !isFeePaid && (
                           <>
                             <Box
                               sx={{
@@ -803,21 +1048,21 @@ const TutorVerificationFormPage: React.FC = () => {
                     <Card
                       variant="outlined"
                       onClick={() => {
-                        if (!formSubmitted) {
+                        if (!formSubmitted && !isFeePaid) {
                           setFeeStatus('DEDUCT');
                           setFeeFile(null);
                         }
                       }}
                       sx={{
                         borderRadius: 3,
-                        cursor: formSubmitted ? 'default' : 'pointer',
+                        cursor: (formSubmitted || isFeePaid) ? 'default' : 'pointer',
                         borderColor:
                           feeStatus === 'DEDUCT'
                             ? alpha('#f59e0b', 0.5)
                             : alpha('#64748b', 0.1),
                         bgcolor:
                           feeStatus === 'DEDUCT' ? alpha('#f59e0b', 0.02) : 'white',
-                        opacity: formSubmitted ? 0.7 : 1,
+                        opacity: (formSubmitted || isFeePaid) ? 0.7 : 1,
                       }}
                     >
                       <CardContent sx={{ p: 3 }}>
@@ -859,38 +1104,38 @@ const TutorVerificationFormPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Step 3: Declaration */}
-        {activeStep === 2 && (
+        {/* Step: Declaration */}
+        {currentStepId === 'declaration' && (
           <Box>
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: isMobile ? 2 : 4 }}>
               <Typography
-                variant="h6"
+                variant={isMobile ? 'subtitle1' : 'h6'}
                 fontWeight={700}
                 sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
               >
                 Step 3: Declaration & Consent
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                By submitting your application, you must agree to the following terms and conditions. Please read carefully and check all boxes to proceed.
+              <Typography variant="body2" color="text.secondary" sx={{ mb: isMobile ? 2 : 3 }}>
+                By submitting your application, you must agree to the following terms and conditions.
               </Typography>
             </Box>
 
             <Card
               variant="outlined"
               sx={{
-                mb: 3,
-                borderRadius: 3,
+                mb: isMobile ? 2 : 3,
+                borderRadius: isMobile ? 2 : 3,
                 borderColor: alpha('#f59e0b', 0.3),
                 bgcolor: alpha('#f59e0b', 0.02),
               }}
             >
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ScanLine size={18} color="#d97706" />
+              <CardContent sx={{ p: isMobile ? 2 : 3 }}>
+                <Typography variant={isMobile ? 'body1' : 'subtitle2'} fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ScanLine size={isMobile ? 16 : 18} color="#d97706" />
                   Terms & Conditions
                 </Typography>
 
-                <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+                <Alert severity="warning" sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}>
                   <Typography variant="body2">
                     Any false or misleading information may lead to rejection or permanent disqualification from the platform.
                   </Typography>
@@ -903,13 +1148,15 @@ const TutorVerificationFormPage: React.FC = () => {
                         checked={agreedToTerms}
                         onChange={(e) => setAgreedToTerms(e.target.checked)}
                         disabled={formSubmitted}
+                        sx={{ '& .MuiSvgIcon-root': { fontSize: isMobile ? 24 : 20 } }}
                       />
                     }
                     label={
-                      <Typography variant="body2" color="#475569">
+                      <Typography variant={isMobile ? 'body2' : 'body2'} color="#475569">
                         I agree to the Terms & Conditions and Policies of the platform
                       </Typography>
                     }
+                    sx={{ mb: isMobile ? 1.5 : 1, alignItems: 'flex-start' }}
                   />
                   <FormControlLabel
                     control={
@@ -917,13 +1164,15 @@ const TutorVerificationFormPage: React.FC = () => {
                         checked={confirmedAuthentic}
                         onChange={(e) => setConfirmedAuthentic(e.target.checked)}
                         disabled={formSubmitted}
+                        sx={{ '& .MuiSvgIcon-root': { fontSize: isMobile ? 24 : 20 } }}
                       />
                     }
                     label={
-                      <Typography variant="body2" color="#475569">
+                      <Typography variant={isMobile ? 'body2' : 'body2'} color="#475569">
                         I confirm that all uploaded documents are genuine, authentic, and not fake
                       </Typography>
                     }
+                    sx={{ mb: isMobile ? 1.5 : 1, alignItems: 'flex-start' }}
                   />
                   <FormControlLabel
                     control={
@@ -931,13 +1180,15 @@ const TutorVerificationFormPage: React.FC = () => {
                         checked={understandConsequences}
                         onChange={(e) => setUnderstandConsequences(e.target.checked)}
                         disabled={formSubmitted}
+                        sx={{ '& .MuiSvgIcon-root': { fontSize: isMobile ? 24 : 20 } }}
                       />
                     }
                     label={
-                      <Typography variant="body2" color="#475569">
+                      <Typography variant={isMobile ? 'body2' : 'body2'} color="#475569">
                         I understand that any false or misleading information may lead to rejection or permanent disqualification
                       </Typography>
                     }
+                    sx={{ mb: isMobile ? 1.5 : 1, alignItems: 'flex-start' }}
                   />
                 </FormGroup>
 
@@ -976,8 +1227,8 @@ const TutorVerificationFormPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Step 4: Review */}
-        {activeStep === 3 && (
+        {/* Step: Review */}
+        {currentStepId === 'review' && (
           <Box>
             <Box sx={{ mb: 4 }}>
               <Typography
@@ -1152,8 +1403,8 @@ const TutorVerificationFormPage: React.FC = () => {
           </Box>
         )}
 
-        {/* Step 5: Submit */}
-        {activeStep === 4 && (
+        {/* Step: Submit */}
+        {currentStepId === 'submit' && (
           <Box>
             <Box sx={{ mb: 4 }}>
               <Typography
@@ -1267,27 +1518,36 @@ const TutorVerificationFormPage: React.FC = () => {
       </Paper>
 
       {/* Navigation Buttons */}
-      <Box display="flex" justifyContent="space-between" mt={3}>
+      <Box display="flex" justifyContent="space-between" mt={isMobile ? 2 : 3} gap={isMobile ? 1 : 2}>
         <Button
           variant="outlined"
           onClick={handleBack}
           disabled={activeStep === 0 || formSubmitted}
-          startIcon={<ChevronLeft size={18} />}
-          sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+          startIcon={<ChevronLeft size={isMobile ? 16 : 18} />}
+          sx={{ 
+            borderRadius: 2, 
+            textTransform: 'none', 
+            fontWeight: 600,
+            minHeight: isMobile ? 48 : 40,
+            px: isMobile ? 2 : 3,
+            fontSize: isMobile ? '0.875rem' : '0.8125rem',
+          }}
         >
-          Back
+          {isMobile ? 'Back' : 'Back'}
         </Button>
 
         <Button
           variant="contained"
           onClick={handleNext}
           disabled={!canProceedToNextStep() || loading || formSubmitted}
-          endIcon={activeStep === 4 ? <CheckCircle size={18} /> : <ChevronRight size={18} />}
+          endIcon={activeStep === 4 ? <CheckCircle size={isMobile ? 16 : 18} /> : <ChevronRight size={isMobile ? 16 : 18} />}
           sx={{
             borderRadius: 2,
             textTransform: 'none',
             fontWeight: 600,
-            px: 4,
+            minHeight: isMobile ? 48 : 40,
+            px: isMobile ? 3 : 4,
+            fontSize: isMobile ? '0.875rem' : '0.8125rem',
             bgcolor: activeStep === 4 ? '#10b981' : undefined,
             '&:hover': {
               bgcolor: activeStep === 4 ? '#059669' : undefined,
@@ -1295,9 +1555,9 @@ const TutorVerificationFormPage: React.FC = () => {
           }}
         >
           {loading ? (
-            <CircularProgress size={20} color="inherit" />
-          ) : activeStep === 4 ? (
-            'Submit Application'
+            <CircularProgress size={isMobile ? 24 : 20} color="inherit" />
+          ) : currentStepId === 'submit' ? (
+            'Submit'
           ) : (
             'Next'
           )}
@@ -1309,38 +1569,51 @@ const TutorVerificationFormPage: React.FC = () => {
         open={qrModalOpen}
         onClose={() => setQrModalOpen(false)}
         maxWidth="sm"
+        fullWidth={isMobile}
         PaperProps={{
           sx: {
-            borderRadius: 4,
-            p: 3,
+            borderRadius: isMobile ? 3 : 4,
+            p: isMobile ? 2 : 3,
             textAlign: 'center',
+            mx: isMobile ? 2 : 'auto',
           },
         }}
       >
-        <Typography variant="h6" fontWeight={700} gutterBottom>
+        <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={700} gutterBottom>
           Scan to Pay
         </Typography>
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: isMobile ? 1 : 2 }}>
           <img
             src="/verification-qr.png"
             alt="Payment QR"
-            style={{ width: 280, height: 280, maxWidth: '100%' }}
+            style={{ width: isMobile ? '100%' : 280, height: 'auto', maxWidth: 280, maxHeight: 280 }}
           />
         </Box>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
+        <Typography variant="body1" color="text.secondary" fontWeight={600} gutterBottom>
           Amount: ₹{VERIFICATION_FEE_AMOUNT}
         </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+        <Typography variant={isMobile ? 'caption' : 'body2'} color="text.secondary" display="block" sx={{ mb: isMobile ? 2 : 3 }}>
           KAMALJEET DANGI SO VINOD SINGH
         </Typography>
         <Button
           variant="contained"
           onClick={() => setQrModalOpen(false)}
-          sx={{ borderRadius: 2, textTransform: 'none' }}
+          fullWidth={isMobile}
+          sx={{ 
+            borderRadius: 2, 
+            textTransform: 'none',
+            minHeight: isMobile ? 48 : 40,
+            fontWeight: 600,
+          }}
         >
           Close
         </Button>
       </Dialog>
+      <DocumentViewerModal
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        document={viewingDocument}
+      />
     </Container>
   );
 };

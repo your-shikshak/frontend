@@ -3,15 +3,19 @@ import {
   User, Phone, Mail, Calendar, MapPin, GraduationCap, Briefcase, Clock,
   FileText, CheckCircle, Star, Award, BookOpen, Languages, Sparkles,
   BarChart2, ShieldCheck, Info, Heart, ExternalLink, CreditCard, Wallet, Handshake,
-  ShieldAlert, Eye
+  ShieldAlert, Eye, ScanLine
 } from 'lucide-react';
 import { ITutor, IDocument } from '../../types';
 import { getMyProfile, uploadDocument, getTutorById, updateVerificationFeeStatus } from '../../services/tutorService';
 import { useAuth } from '../../hooks/useAuth';
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+
 import DocumentViewerModal from '../common/DocumentViewerModal';
 import { useNavigate } from 'react-router-dom';
 import { useOptions } from '../../hooks/useOptions';
+import { useDemoMode } from '../../hooks/useDemoMode';
+
+import { PlayCircle, StopCircle } from 'lucide-react';
 
 
 interface MUIProfileCardProps {
@@ -50,6 +54,11 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
   const isTutorSelf = Boolean(!tutorId && currentUser && currentUser.role === 'TUTOR');
   const VERIFICATION_FEE_AMOUNT = 500; // Matches backend constant
 
+  const { isDemoMode, toggleDemoMode, getDemoTutor } = useDemoMode();
+
+
+  const displayTutor = useMemo(() => getDemoTutor(tutor), [tutor, isDemoMode]);
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -81,7 +90,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
   };
 
   const groupedSubjects = useMemo(() => {
-    if (!tutor || !tutor.subjects) return [];
+    if (!displayTutor || !displayTutor.subjects) return [];
 
     interface Group {
       parentLabel: string;
@@ -89,7 +98,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     }
     const groups: Record<string, Group> = {};
 
-    tutor.subjects.forEach((sub: any) => {
+    displayTutor.subjects.forEach((sub: any) => {
       if (!sub) return;
 
       let label = '';
@@ -129,7 +138,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
   const { options: cityOptions } = useOptions('CITY');
 
   const groupedLocations = useMemo(() => {
-    if (!tutor || !tutor.preferredCities) return [];
+    if (!displayTutor || !displayTutor.preferredCities) return [];
 
     interface LocationGroup {
       city: string;
@@ -138,14 +147,14 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     const groups: Record<string, LocationGroup> = {};
 
     // Initialize groups for all preferred cities
-    tutor.preferredCities.forEach(city => {
+    displayTutor.preferredCities.forEach((city: string) => {
       groups[city] = { city, areas: [] };
     });
 
     // Attempt to distribute preferred locations among cities
-    if (tutor.preferredLocations) {
-      tutor.preferredLocations.forEach(loc => {
-        const cityKey = tutor.preferredCities?.[0] || 'Other';
+    if (displayTutor.preferredLocations) {
+      displayTutor.preferredLocations.forEach((loc: string) => {
+        const cityKey = displayTutor.preferredCities?.[0] || 'Other';
         if (!groups[cityKey]) groups[cityKey] = { city: cityKey, areas: [] };
 
         // Deduplicate and skip if area name matches city name
@@ -156,7 +165,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     }
 
     return Object.values(groups).filter(g => g.city !== 'Other' || g.areas.length > 0);
-  }, [tutor?.preferredCities, tutor?.preferredLocations]);
+  }, [displayTutor?.preferredCities, displayTutor?.preferredLocations]);
 
   const [expandedLocations, setExpandedLocations] = useState<Record<string, boolean>>({});
 
@@ -165,18 +174,18 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
   };
 
   useEffect(() => {
-    if (tutor) {
+    if (displayTutor) {
       console.log('MUIProfileCard Debug:', {
-        profileImageUrl: tutor.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl,
-        hasDocuments: !!tutor.documents,
-        docCount: tutor.documents?.length || 0
+        profileImageUrl: displayTutor.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl,
+        hasDocuments: !!displayTutor.documents,
+        docCount: displayTutor.documents?.length || 0
       });
     }
-  }, [tutor]);
+  }, [displayTutor]);
 
   const handleShareProfile = async () => {
-    if (!tutor) return;
-    const teacherId = tutor.teacherId || '';
+    if (!displayTutor) return;
+    const teacherId = displayTutor.teacherId || '';
     if (!teacherId) return;
     const origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
     const url = `${origin}/ourtutor/${teacherId}`;
@@ -193,7 +202,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     }
   };
 
-  if (loading && !tutor) {
+  if (loading && !displayTutor) {
     return (
       <div className="flex justify-center items-center h-64">
         <CircularProgress size={40} thickness={4} />
@@ -201,7 +210,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     );
   }
 
-  if (error || !tutor) return (
+  if (error || !displayTutor) return (
     <div className="p-8 text-center bg-red-50 rounded-2xl border border-red-100">
       <p className="text-red-600 font-medium">{error || 'Tutor not found'}</p>
       <DocumentViewerModal
@@ -211,14 +220,14 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
       />
     </div>
   );
-  const { user } = tutor;
-  const profilePhotoDoc = (tutor.documents || []).find((d) => d.documentType === 'PROFILE_PHOTO');
+  const { user } = displayTutor;
+  const profilePhotoDoc = (displayTutor.documents || []).find((d) => d.documentType === 'PROFILE_PHOTO');
   const profileImageUrl = profilePhotoDoc?.documentUrl;
 
   console.log('MUIProfileCard Debug:', {
     profileImageUrl,
-    hasDocuments: !!tutor.documents?.length,
-    docCount: tutor.documents?.length
+    hasDocuments: !!displayTutor.documents?.length,
+    docCount: displayTutor.documents?.length
   });
 
   const initials = (user?.name || '').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
@@ -251,7 +260,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
     try {
       setUploadingAvatar(true);
       setUploadError(null);
-      const res = await uploadDocument((tutor as any).id || tutor._id, 'PROFILE_PHOTO', selectedFile);
+      const res = await uploadDocument((displayTutor as any).id || displayTutor._id, 'PROFILE_PHOTO', selectedFile);
       setTutor(res.data);
       setAvatarModalOpen(false);
       setSelectedFile(null);
@@ -269,7 +278,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
 
   type DocumentStatus = 'not_uploaded' | 'pending' | 'approved';
   const computeStatusForType = (backendType: string): DocumentStatus => {
-    const allDocs = (tutor.documents || []).filter((d) => d.documentType === backendType);
+    const allDocs = (displayTutor.documents || []).filter((d) => d.documentType === backendType);
     if (!allDocs.length) return 'not_uploaded';
     const anyApproved = allDocs.some((d) => d.verifiedAt);
     if (anyApproved) return 'approved';
@@ -277,7 +286,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
   };
 
   const handleOpenViewer = (backendType: string) => {
-    const doc = (tutor.documents || []).find(d => d.documentType === backendType);
+    const doc = (displayTutor.documents || []).find(d => d.documentType === backendType);
     if (doc) {
       setViewingDocument(doc);
       setViewerOpen(true);
@@ -315,7 +324,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
       setDocumentUploadError(null);
       // Map frontend types to backend types if needed, or ensure they match
       // In this case, 'DEGREE' was removed, others match enum in backend if consistent
-      const res = await uploadDocument((tutor as any).id || tutor._id, selectedDocumentType, selectedDocumentFile);
+      const res = await uploadDocument((displayTutor as any).id || displayTutor._id, selectedDocumentType, selectedDocumentFile);
       setTutor(res.data);
       handleCloseDocumentModal();
     } catch (e: any) {
@@ -338,7 +347,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
 
 
   const handleFeeSubmit = async () => {
-    if (!tutor || !feeAction) return;
+    if (!displayTutor || !feeAction) return;
     try {
       setSubmittingFee(true);
       setFeeError(null);
@@ -357,7 +366,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
       const feeStatus = (feeAction === 'PAY_NOW' || feeAction === 'ADMIN_MARK_PAID') ? 'PAID' : 'DEDUCT_FROM_FIRST_MONTH';
 
       const res = await updateVerificationFeeStatus(
-        (tutor as any).id || tutor._id,
+        (displayTutor as any).id || displayTutor._id,
         feeStatus,
         feeFile || undefined
       );
@@ -374,9 +383,11 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+    <div className="max-w-6xl mx-auto space-y-8 pb-12 relative">
+
+      
       {/* 1. HERO SECTION - Yourshikshak  LIGHT MODE */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#f8faff] to-[#eff6ff] rounded-[2.5rem] shadow-xl border border-slate-100 transition-all duration-500 hover:shadow-indigo-500/5">
+      <div id="tour-hero" className="relative overflow-hidden bg-gradient-to-br from-[#f8faff] to-[#eff6ff] rounded-[2.5rem] shadow-xl border border-slate-100 transition-all duration-500 hover:shadow-indigo-500/5">
         {/* Animated Background Accents */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-400/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 animate-pulse" />
         <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-indigo-400/5 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/2" />
@@ -415,10 +426,10 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 )}
               </div>
               <div className="px-5 py-2 rounded-full bg-white border border-slate-100 shadow-md flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${tutor.tier?.includes('GOLD') ? 'bg-amber-400' : tutor.tier?.includes('SILVER') ? 'bg-slate-400' : 'bg-orange-500'}`} />
+                <div className={`w-2 h-2 rounded-full ${displayTutor.tier?.includes('GOLD') ? 'bg-amber-400' : displayTutor.tier?.includes('SILVER') ? 'bg-slate-400' : 'bg-orange-500'}`} />
                 <span className="text-[10px] font-black tracking-[0.15em] uppercase text-slate-500">
-                  Tier: <span className={tutor.tier?.includes('GOLD') ? 'text-amber-600' : tutor.tier?.includes('SILVER') ? 'text-slate-600' : 'text-orange-600'}>
-                    {tutor.tier?.split('(')[1]?.replace(')', '') || 'Bronze'}
+                  Tier: <span className={displayTutor.tier?.includes('GOLD') ? 'text-amber-600' : displayTutor.tier?.includes('SILVER') ? 'text-slate-600' : 'text-orange-600'}>
+                    {displayTutor.tier?.split('(')[1]?.replace(')', '') || 'Bronze'}
                   </span>
                 </span>
               </div>
@@ -429,9 +440,9 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
                   <h1 className="text-4xl md:text-5xl font-extrabold text-[#1e293b] tracking-tight font-['Manrope']" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                    {user?.name}
+                    {displayTutor?.user?.name}
                   </h1>
-                  {tutor.verificationStatus === 'VERIFIED' && (
+                  {displayTutor?.verificationStatus === 'VERIFIED' && (
                     <div className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 flex items-center gap-1.5 shadow-sm">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
                       <span className="text-[10px] font-black text-emerald-700 tracking-wider">VERIFIED</span>
@@ -441,12 +452,12 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 <div className="flex items-center justify-center md:justify-start gap-3">
                   <div className="w-8 h-[2px] bg-blue-600/30 rounded-full" />
                   <p className="text-blue-600 font-extrabold text-sm tracking-[0.1em] uppercase opacity-90 font-['Manrope']">
-                    {tutor.qualifications?.[0] || "Professional Educator"}
+                    {displayTutor.qualifications?.[0] || "Professional Educator"}
                   </p>
                 </div>
                 <div className="relative">
                   <p className="text-[#475569] font-medium text-lg max-w-2xl leading-relaxed italic border-l-4 border-blue-500/20 pl-6 py-2 bg-blue-50/30 rounded-r-2xl">
-                    "{tutor.bio || "Dedicated to empowering students through personalized and innovative teaching methodologies."}"
+                    "{displayTutor.bio || "Dedicated to empowering students through personalized and innovative teaching methodologies."}"
                   </p>
                 </div>
               </div>
@@ -454,40 +465,69 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
               <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-8">
                 <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
                   <Award className="w-5 h-5 text-blue-500" />
-                  <span className="text-xs font-extrabold text-[#1e293b] tracking-widest uppercase font-['Manrope']">{tutor.teacherId || 'TUT-XXXX'}</span>
+                  <span className="text-xs font-extrabold text-[#1e293b] tracking-widest uppercase font-['Manrope']">{displayTutor.teacherId || 'TUT-XXXX'}</span>
                 </div>
                 <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
                   <Clock className="w-5 h-5 text-indigo-500" />
                   <div className="flex flex-col">
-                    <span className="text-lg font-black text-[#1e293b] leading-none">{tutor.experienceHours || 0}</span>
+                    <span className="text-lg font-black text-[#1e293b] leading-none">{displayTutor.experienceHours || 0}</span>
                     <span className="text-[9px] font-bold text-slate-400 tracking-tighter uppercase mt-0.5">Total Hours</span>
                   </div>
                 </div>
                 {!tutorId && (
-                  <Button
-                    startIcon={<ExternalLink size={18} />}
-                    variant="contained"
-                    size="large"
-                    onClick={handleShareProfile}
-                    sx={{
-                      borderRadius: '18px',
-                      background: 'linear-gradient(135deg, #2563eb 0%, #0066ff 100%)',
-                      color: 'white',
-                      fontFamily: "'Manrope', sans-serif",
-                      fontWeight: 800,
-                      textTransform: 'none',
-                      px: 4,
-                      boxShadow: '0 8px 16px rgba(0, 102, 255, 0.2)',
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #1d4ed8 0%, #0052cc 100%)',
-                        boxShadow: '0 12px 20px rgba(0, 102, 255, 0.3)',
-                        transform: 'translateY(-2px)'
-                      },
-                      transition: 'all 0.3s'
-                    }}
-                  >
-                    {shareCopied ? 'URL Copied!' : 'Share Profile'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      startIcon={<ExternalLink size={18} />}
+                      variant="contained"
+                      size="large"
+                      onClick={handleShareProfile}
+                      sx={{
+                        borderRadius: '18px',
+                        background: 'linear-gradient(135deg, #2563eb 0%, #0066ff 100%)',
+                        color: 'white',
+                        fontFamily: "'Manrope', sans-serif",
+                        fontWeight: 800,
+                        textTransform: 'none',
+                        px: 4,
+                        boxShadow: '0 8px 16px rgba(0, 102, 255, 0.2)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #1d4ed8 0%, #0052cc 100%)',
+                          boxShadow: '0 12px 20px rgba(0, 102, 255, 0.3)',
+                          transform: 'translateY(-2px)'
+                        },
+                        transition: 'all 0.3s'
+                      }}
+                    >
+                      {shareCopied ? 'URL Copied!' : 'Share Profile'}
+                    </Button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  </div>
                 )}
               </div>
             </div>
@@ -496,18 +536,18 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
             <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-xl min-w-[220px] flex flex-col justify-center">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Status</span>
-                <div className={`w-3 h-3 rounded-full animate-pulse ${tutor.isAvailable ? 'bg-emerald-500' : 'bg-red-500'} shadow-[0_0_10px_rgba(16,185,129,0.5)]`} />
+                <div className={`w-3 h-3 rounded-full animate-pulse ${displayTutor.isAvailable ? 'bg-emerald-500' : 'bg-red-500'} shadow-[0_0_10px_rgba(16,185,129,0.5)]`} />
               </div>
               <div className="text-center space-y-4">
                 <div className="py-2 px-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <p className={`text-xl font-black font-['Manrope'] ${tutor.isAvailable ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {tutor.isAvailable ? 'ACTIVE' : 'OFF DUTY'}
+                  <p className={`text-xl font-black font-['Manrope'] ${displayTutor.isAvailable ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {displayTutor.isAvailable ? 'ACTIVE' : 'OFF DUTY'}
                   </p>
                 </div>
                 <Divider sx={{ borderColor: alpha('#64748b', 0.08) }} />
                 <div className="flex items-center justify-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${tutor.whatsappCommunityJoined ? 'bg-blue-500' : 'bg-slate-300'}`} />
-                  <p className="text-[10px] font-extrabold text-slate-500 tracking-tight">WHATSAPP COMMUNITY: {tutor.whatsappCommunityJoined ? 'JOINED' : 'PENDING'}</p>
+                  <div className={`w-2 h-2 rounded-full ${displayTutor.whatsappCommunityJoined ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                  <p className="text-[10px] font-extrabold text-slate-500 tracking-tight">WHATSAPP COMMUNITY: {displayTutor.whatsappCommunityJoined ? 'JOINED' : 'PENDING'}</p>
                 </div>
               </div>
             </div>
@@ -517,14 +557,14 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
 
       <Grid container spacing={4}>
         {/* 2. STATS OVERVIEW - Yourshikshak  */}
-        <Grid item xs={12}>
+        <Grid item xs={12} id="tour-stats">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
             {[
-              { label: 'Assigned', value: tutor.classesAssigned, icon: BarChart2, color: '#2563eb', bg: 'bg-blue-50/50' },
-              { label: 'Completed', value: tutor.classesCompleted, icon: CheckCircle, color: '#059669', bg: 'bg-emerald-50/50' },
-              { label: 'Demos', value: tutor.demosTaken, icon: Clock, color: '#7c3aed', bg: 'bg-violet-50/50' },
-              { label: 'Hours', value: tutor.experienceHours || 0, icon: Clock, color: '#d97706', bg: 'bg-amber-50/50' },
-              { label: 'Interests', value: tutor.interestCount, icon: Heart, color: '#e11d48', bg: 'bg-rose-50/50' },
+              { label: 'Assigned', value: displayTutor.classesAssigned, icon: BarChart2, color: '#2563eb', bg: 'bg-blue-50/50' },
+              { label: 'Completed', value: displayTutor.classesCompleted, icon: CheckCircle, color: '#059669', bg: 'bg-emerald-50/50' },
+              { label: 'Demos', value: displayTutor.demosTaken, icon: Clock, color: '#7c3aed', bg: 'bg-violet-50/50' },
+              { label: 'Hours', value: displayTutor.experienceHours || 0, icon: Clock, color: '#d97706', bg: 'bg-amber-50/50' },
+              { label: 'Interests', value: displayTutor.interestCount, icon: Heart, color: '#e11d48', bg: 'bg-rose-50/50' },
             ].map((stat, i) => (
               <div key={i} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center text-center group hover:shadow-xl hover:-translate-y-2 transition-all duration-500">
                 <div className={`w-14 h-14 rounded-2xl ${stat.bg} mb-4 flex items-center justify-center group-hover:rotate-6 transition-all duration-500`} style={{ color: stat.color }}>
@@ -538,7 +578,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
         </Grid>
 
         {/* 3. LEFT COLUMN: PERSONAL & CONTACT */}
-        <Grid item xs={12} lg={4} className="space-y-6">
+        <Grid item xs={12} lg={4} className="space-y-6" id="tour-contact">
           {/* Contact Details - Yourshikshak  */}
           <section className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8 space-y-6">
             <h3 className="text-lg font-black text-[#1e293b] flex items-center gap-3 font-['Manrope']" style={{ fontFamily: "'Manrope', sans-serif" }}>
@@ -551,18 +591,25 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
               {[
                 { label: 'Primary Email', value: user?.email, icon: Mail },
                 { label: 'Secure WhatsApp', value: user?.phone, icon: Phone },
-                { label: 'Emergency Contact', value: tutor?.alternatePhone, icon: Phone },
+                { label: 'Emergency Contact', value: displayTutor?.alternatePhone, icon: Phone },
                 { label: 'Base Location', value: user?.city, icon: MapPin },
                 { label: 'Gender Profile', value: user?.gender?.toLowerCase(), icon: User, capitalize: true },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-4 group">
-                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
+                <div key={i} className="flex items-start gap-4 group">
+                  <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 mt-1">
                     <item.icon size={16} />
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-['Manrope']">{item.label}</p>
-                    <p className={`text-sm font-bold text-[#334155] ${item.capitalize ? 'capitalize' : ''}`}>
-                      {item.value || 'DEFERRED'}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-['Manrope'] mb-0.5">{item.label}</p>
+                    <p className={`text-sm font-bold text-[#334155] break-all leading-snug ${item.capitalize ? 'capitalize' : ''}`}>
+                      {item.label === 'Primary Email' && item.value 
+                        ? item.value.split('@').map((part, idx) => (
+                            <React.Fragment key={idx}>
+                              {idx > 0 && '@\u200B'}
+                              {part}
+                            </React.Fragment>
+                          ))
+                        : (item.value || 'DEFERRED')}
                     </p>
                   </div>
                 </div>
@@ -571,30 +618,30 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
           </section>
 
           {/* Verification Status Card */}
-          <section className={`rounded-[2rem] shadow-sm p-8 border ${tutor.verificationStatus === 'VERIFIED' ? 'bg-emerald-50/30 border-emerald-100' : 'bg-amber-50/30 border-amber-100'}`}>
+          <section className={`rounded-[2rem] shadow-sm p-8 border ${displayTutor.verificationStatus === 'VERIFIED' ? 'bg-emerald-50/30 border-emerald-100' : 'bg-amber-50/30 border-amber-100'}`}>
             <h3 className="text-lg font-black text-[#1e293b] mb-6 flex items-center gap-3 font-['Manrope']" style={{ fontFamily: "'Manrope', sans-serif" }}>
-              <ShieldCheck className={tutor.verificationStatus === 'VERIFIED' ? 'text-emerald-600' : 'text-amber-600'} /> Validation
+              <ShieldCheck className={displayTutor.verificationStatus === 'VERIFIED' ? 'text-emerald-600' : 'text-amber-600'} /> Verification
             </h3>
             <div className="space-y-4">
               <div className="flex justify-between items-center text-sm">
-                <span className="font-bold text-slate-500 font-['Manrope']">Registry Status:</span>
-                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase ${tutor.verificationStatus === 'VERIFIED' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' : 'bg-amber-500 text-white shadow-lg shadow-amber-200'
+                <span className="font-bold text-slate-500 font-['Manrope']">Verification Status:</span>
+                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase ${displayTutor.verificationStatus === 'VERIFIED' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' : 'bg-amber-500 text-white shadow-lg shadow-amber-200'
                   }`}>
-                  {tutor.verificationStatus}
+                  {displayTutor.verificationStatus}
                 </span>
               </div>
-              {tutor.verifiedAt && (
+              {displayTutor.verifiedAt && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="font-bold text-slate-500 font-['Manrope']">Authenticated On:</span>
-                  <span className="text-slate-700 font-black font-['Manrope'] text-xs opacity-60">{new Date(tutor.verifiedAt).toLocaleDateString()}</span>
+                  <span className="text-slate-700 font-black font-['Manrope'] text-xs opacity-60">{new Date(displayTutor.verifiedAt).toLocaleDateString()}</span>
                 </div>
               )}
-              {tutor.verificationNotes && (
+              {displayTutor.verificationNotes && (
                 <div className="mt-4 p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-2 flex items-center gap-1.5 font-['Manrope']">
                     <Info size={12} className="text-blue-500" /> System Remarks
                   </p>
-                  <p className="text-xs text-[#475569] font-medium italic leading-relaxed">"{tutor.verificationNotes}"</p>
+                  <p className="text-xs text-[#475569] font-medium italic leading-relaxed">"{displayTutor.verificationNotes}"</p>
                 </div>
               )}
             </div>
@@ -602,7 +649,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
         </Grid>
 
         {/* 4. MAIN COLUMN: TEACHING & EXPERIENCE */}
-        <Grid item xs={12} lg={8} className="space-y-6">
+        <Grid item xs={12} lg={8} className="space-y-6" id="tour-portfolio">
           {/* Professional Credentials - Yourshikshak  */}
           <section className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-10">
             <div className="flex flex-wrap justify-between items-center gap-6 mb-10">
@@ -610,11 +657,11 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <BookOpen size={22} strokeWidth={2.5} />
                 </div>
-                Academic Portfolio
+                Profile Portfolio
               </h3>
               <div className="flex items-center gap-3 bg-slate-50 px-5 py-2.5 rounded-2xl border border-slate-100 shadow-sm">
                 <Briefcase className="text-blue-500 shadow-xl" size={16} />
-                <span className="text-xs font-black text-[#475569] uppercase tracking-wider font-['Manrope']">{tutor.yearsOfExperience || 0}+ Years Specialized Experience</span>
+                <span className="text-xs font-black text-[#475569] uppercase tracking-wider font-['Manrope']">{displayTutor.yearsOfExperience || 0}+ Years Specialized Experience</span>
               </div>
             </div>
 
@@ -624,7 +671,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 font-['Manrope']">Linguistic Fluency</p>
                     <div className="flex flex-wrap gap-2.5">
-                      {tutor.languagesKnown?.length ? tutor.languagesKnown.map((lang, idx) => (
+                      {displayTutor.languagesKnown?.length ? displayTutor.languagesKnown.map((lang, idx) => (
                         <Chip key={idx} icon={<Languages size={14} />} label={lang} sx={{ bgcolor: '#f1f5f9', color: '#334155', fontWeight: 800, borderRadius: '12px', border: '1px solid #e2e8f0', fontFamily: "'Manrope', sans-serif", fontSize: '0.7rem' }} />
                       )) : <span className="text-slate-400 text-xs italic">Awaiting selection</span>}
                     </div>
@@ -632,7 +679,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 font-['Manrope']">Distinctive Skillsets</p>
                     <div className="flex flex-wrap gap-2.5">
-                      {tutor.skills?.length ? tutor.skills.map((skill, idx) => (
+                      {displayTutor.skills?.length ? displayTutor.skills.map((skill, idx) => (
                         <Chip key={idx} icon={<Sparkles size={14} />} label={skill} sx={{ bgcolor: alpha('#0066ff', 0.05), color: '#0066ff', fontWeight: 800, borderRadius: '12px', border: '1px solid', borderColor: alpha('#0066ff', 0.1), fontFamily: "'Manrope', sans-serif", fontSize: '0.7rem' }} />
                       )) : <span className="text-slate-400 text-xs italic">Awaiting selection</span>}
                     </div>
@@ -645,7 +692,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 font-['Manrope']">Verified Qualifications</p>
                     <div className="space-y-3">
-                      {tutor.qualifications?.length ? (tutor.qualifications as any[]).map((q, idx) => {
+                      {displayTutor.qualifications?.length ? (displayTutor.qualifications as any[]).map((q, idx) => {
                         const label = typeof q === 'string' ? q : (q as any)?.label || (q as any)?.name || 'N/A';
                         return (
                           <div key={`${(q as any)?._id || idx}`} className="flex items-center gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 transition-all hover:bg-white hover:shadow-md hover:border-blue-100 group">
@@ -672,7 +719,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
               <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 shadow-sm">
                 <Sparkles size={20} strokeWidth={2.5} />
               </div>
-              Service Architecture
+              Academic portfolio
             </h3>
 
             <Grid container spacing={4} className="relative z-10">
@@ -716,7 +763,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                   <p className="text-[10px] font-black text-[#64748b] uppercase tracking-[0.2em] mb-4 font-['Manrope']">Preferred Methodology</p>
                   <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-[#0066ff] px-6 py-3 rounded-2xl font-black tracking-widest text-[#fff] shadow-lg shadow-blue-500/20 text-xs">
                     <Handshake size={16} />
-                    {tutor.preferredMode || 'NOT SELECTED'}
+                    {displayTutor.preferredMode || 'NOT SELECTED'}
                   </div>
                 </div>
               </Grid>
@@ -765,20 +812,20 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 <div>
                   <p className="text-[10px] font-black text-[#64748b] uppercase tracking-[0.2em] mb-4 font-['Manrope']">Availability Pulse</p>
                   <div className="space-y-3">
-                    {tutor.settings?.availabilityPreferences?.daysAvailable?.length ? (
+                    {displayTutor.settings?.availabilityPreferences?.daysAvailable?.length ? (
                       <div className="flex items-center gap-3 text-sm font-bold text-[#334155]">
                         <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100">
                           <Calendar size={16} />
                         </div>
-                        <span>{tutor.settings.availabilityPreferences.daysAvailable.join(', ')}</span>
+                        <span>{displayTutor.settings.availabilityPreferences.daysAvailable.join(', ')}</span>
                       </div>
                     ) : null}
-                    {tutor.settings?.availabilityPreferences?.timeSlots?.length ? (
+                    {displayTutor.settings?.availabilityPreferences?.timeSlots?.length ? (
                       <div className="flex items-center gap-3 text-sm font-bold text-[#64748b]">
                         <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
                           <Clock size={16} />
                         </div>
-                        <span className="opacity-80 font-medium">{tutor.settings.availabilityPreferences.timeSlots.join(' | ')}</span>
+                        <span className="opacity-80 font-medium">{displayTutor.settings.availabilityPreferences.timeSlots.join(' | ')}</span>
                       </div>
                     ) : null}
                   </div>
@@ -798,28 +845,28 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-dashed border-slate-200 group transition-all hover:bg-white hover:border-rose-200">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-3 font-['Manrope'] tracking-widest">Permanent Residence</p>
-                <p className="text-sm font-bold text-[#475569] leading-relaxed font-['Inter']">{tutor.permanentAddress || 'Vault record missing'}</p>
+                <p className="text-sm font-bold text-[#475569] leading-relaxed font-['Inter']">{displayTutor.permanentAddress || 'Vault record missing'}</p>
               </div>
               <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-dashed border-slate-200 group transition-all hover:bg-white hover:border-rose-200">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-3 font-['Manrope'] tracking-widest">Active Operative Base</p>
-                <p className="text-sm font-bold text-[#475569] leading-relaxed font-['Inter']">{tutor.residentialAddress || 'Same as primary'}</p>
+                <p className="text-sm font-bold text-[#475569] leading-relaxed font-['Inter']">{displayTutor.residentialAddress || 'Same as primary'}</p>
               </div>
             </div>
           </section>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid item xs={12} id="tour-documents">
           <section className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8">
             <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
               <h3 className="text-xl font-black text-[#1e293b] flex items-center gap-3 font-['Manrope']" style={{ fontFamily: "'Manrope', sans-serif" }}>
                 <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
                   <FileText size={20} strokeWidth={2.5} />
                 </div>
-                Compliance Repository
+                Verification Documents
               </h3>
               <div className="flex flex-wrap gap-2">
                 {/* Start Verification Button - Show only for non-verified tutors viewing their own profile */}
-                {isTutorSelf && tutor.verificationStatus !== 'VERIFIED' && tutor.verificationStatus !== 'UNDER_REVIEW' && (
+                {isTutorSelf && displayTutor.verificationStatus !== 'VERIFIED' && displayTutor.verificationStatus !== 'UNDER_REVIEW' && (
                   <Button
                     variant="contained"
                     size="small"
@@ -837,12 +884,12 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                     Start Verification
                   </Button>
                 )}
-                {(tutor.verificationStatus === 'VERIFIED' || tutor.verificationStatus === 'UNDER_REVIEW') && (
+                {(displayTutor.verificationStatus === 'VERIFIED' || displayTutor.verificationStatus === 'UNDER_REVIEW') && (
                   <span className="flex items-center gap-2 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-full uppercase tracking-wider">
-                    <ShieldCheck size={14} /> {tutor.verificationStatus === 'VERIFIED' ? 'Documents Encrypted & Locked' : 'Verification Submitted'}
+                    <ShieldCheck size={14} /> {displayTutor.verificationStatus === 'VERIFIED' ? 'Documents Encrypted & Locked' : 'Verification Submitted'}
                   </span>
                 )}
-                {tutor.verificationFeeStatus === 'PAID' && (
+                {displayTutor.verificationFeeStatus === 'PAID' && (
                   <Chip icon={<CheckCircle size={14} />} label="Verification Paid" variant="outlined" sx={{ borderRadius: '12px', fontWeight: 800, fontSize: '0.65rem', color: '#059669', borderColor: '#10b981', bgcolor: '#f0fdf4' }} />
                 )}
               </div>
@@ -851,13 +898,14 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
             <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr', md: 'repeat(5, 1fr)' }} gap={3}>
               {Object.entries(docLabels).map(([type, label], idx) => {
                 const status = computeStatusForType(type);
-                const isVerified = tutor.verificationStatus === 'VERIFIED';
+                const isVerified = displayTutor.verificationStatus === 'VERIFIED';
                 const isThisDocUploaded = status === 'pending' || status === 'approved';
-                const canUpload = (isTutorSelf || !tutorId) && !isVerified && (!isThisDocUploaded || (tutor.verificationStatus === 'REJECTED'));
+                const canUpload = (isTutorSelf || !tutorId) && !isVerified && (!isThisDocUploaded || (displayTutor.verificationStatus === 'REJECTED'));
 
                 const handleCardClick = () => {
                   if (isThisDocUploaded) handleOpenViewer(type);
-                  else if (canUpload) handleOpenDocumentModal(type);
+                  // Modal disabled on profile page as per user request
+                  // else if (canUpload) handleOpenDocumentModal(type);
                 };
 
                 return (
@@ -874,7 +922,11 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                       status === 'pending' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' :
                         'bg-slate-300 text-white'
                       }`}>
-                      {status === 'approved' ? <ShieldCheck size={24} /> : <FileText size={24} />}
+                      {type === 'PROFILE_PHOTO' ? <User size={24} /> :
+                        type === 'AADHAAR' ? <ScanLine size={24} /> :
+                          type === 'CERTIFICATE' ? <Award size={24} /> :
+                            type === 'EXPERIENCE_PROOF' ? <Briefcase size={24} /> :
+                              <ShieldCheck size={24} />}
                     </div>
                     <p className="text-[11px] font-black text-[#1e293b] uppercase mb-1 font-['Manrope'] tracking-tight">{label}</p>
                     <p className={`text-[9px] font-black tracking-widest uppercase ${status === 'approved' ? 'text-emerald-600' :
@@ -888,26 +940,26 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
               })}
               {/* Verification Fee Card */}
               <div
-                onClick={(tutor.verificationFeeStatus === 'PAID' || tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') && !isManager ? undefined : handleOpenFeeModal}
-                className={`relative p-6 rounded-[2rem] border-2 transition-all group overflow-hidden ${(tutor.verificationFeeStatus === 'PAID' || tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') && !isManager ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:shadow-xl hover:-translate-y-1'
-                  } ${tutor.verificationFeeStatus === 'PAID' ? 'bg-emerald-50/30 border-emerald-100 hover:border-emerald-300' :
-                    tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'bg-indigo-50/30 border-indigo-100 hover:border-indigo-300' :
+                onClick={(displayTutor.verificationFeeStatus === 'PAID' || displayTutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') && !isManager ? undefined : handleOpenFeeModal}
+                className={`relative p-6 rounded-[2rem] border-2 transition-all group overflow-hidden ${(displayTutor.verificationFeeStatus === 'PAID' || displayTutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') && !isManager ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:shadow-xl hover:-translate-y-1'
+                  } ${displayTutor.verificationFeeStatus === 'PAID' ? 'bg-emerald-50/30 border-emerald-100 hover:border-emerald-300' :
+                    displayTutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'bg-indigo-50/30 border-indigo-100 hover:border-indigo-300' :
                       'bg-slate-50/50 border-slate-100 hover:border-slate-300'
                   }`}
               >
-                <div className={`p-3 rounded-2xl w-fit mb-4 transition-all ${tutor.verificationFeeStatus === 'PAID' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' :
-                  tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-200' :
+                <div className={`p-3 rounded-2xl w-fit mb-4 transition-all ${displayTutor.verificationFeeStatus === 'PAID' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' :
+                  displayTutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-200' :
                     'bg-slate-300 text-white'
                   }`}>
                   <CreditCard size={24} />
                 </div>
                 <p className="text-[11px] font-black text-[#1e293b] uppercase mb-1 font-['Manrope'] tracking-tight">System Fee</p>
-                <p className={`text-[9px] font-black tracking-widest uppercase ${tutor.verificationFeeStatus === 'PAID' ? 'text-emerald-600' :
-                  tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'text-indigo-600' :
+                <p className={`text-[9px] font-black tracking-widest uppercase ${displayTutor.verificationFeeStatus === 'PAID' ? 'text-emerald-600' :
+                  displayTutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'text-indigo-600' :
                     'text-slate-400'
                   }`}>
-                  {tutor.verificationFeeStatus === 'PAID' ? 'SETTLED' :
-                    tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'DEFERRED' :
+                  {displayTutor.verificationFeeStatus === 'PAID' ? 'SETTLED' :
+                    displayTutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'DEFERRED' :
                       'REQUIRED'}
                 </p>
               </div>
@@ -1077,9 +1129,32 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
         onClose={() => setViewerOpen(false)}
         document={viewingDocument}
       />
+      {/* Exit Demo FAB */}
+      {isDemoMode && (
+        <Button
+          variant="contained"
+          onClick={toggleDemoMode}
+          startIcon={<StopCircle size={20} />}
+          sx={{
+            position: 'fixed',
+            bottom: 32,
+            right: 32,
+            zIndex: 1000,
+            borderRadius: '20px',
+            bgcolor: '#ef4444',
+            '&:hover': { bgcolor: '#dc2626' },
+            boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)',
+            textTransform: 'none',
+            fontWeight: 800,
+            px: 3,
+            py: 1.5
+          }}
+        >
+          Exit Demo Mode
+        </Button>
+      )}
     </div >
   );
 };
 
 export default MUIProfileCard;
-

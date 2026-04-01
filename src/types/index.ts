@@ -135,6 +135,7 @@ export interface ITutor {
   publicProfileEnabled: boolean;
   yearsOfExperience: number;
   verificationFeeStatus?: 'PENDING' | 'PAID' | 'DEDUCT_FROM_FIRST_MONTH';
+  verificationRejectionReason?: string;
   verificationFeePaymentProof?: string;
   verificationFeePaymentDate?: Date;
   settings?: {

@@ -9,12 +9,16 @@ import { getTutorAdvancedAnalytics } from '../../services/tutorService';
 import { ITutorAdvancedAnalytics } from '../../types';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../../store/slices/authSlice';
+import { useDemoMode } from '../../hooks/useDemoMode';
+
 
 const TutorAdvancedAnalyticsCards: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const user = useSelector(selectCurrentUser);
+  const { isDemoMode, getDemoAnalytics } = useDemoMode();
   const [loading, setLoading] = useState(true);
+
   const [analytics, setAnalytics] = useState<ITutorAdvancedAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +29,8 @@ const TutorAdvancedAnalyticsCards: React.FC = () => {
         setLoading(true);
         const tutorId = (user as any).id || (user as any)._id;
         const res = await getTutorAdvancedAnalytics(tutorId);
-        setAnalytics(res.data);
+        setAnalytics(getDemoAnalytics(res.data));
+
       } catch (err: any) {
         setError(err.message || 'Failed to fetch analytics');
       } finally {
@@ -85,7 +90,8 @@ const TutorAdvancedAnalyticsCards: React.FC = () => {
   ];
 
   return (
-    <Grid2 container spacing={{ xs: 1.5, sm: 3 }} mb={{ xs: 3, sm: 6 }}>
+    <Grid2 container spacing={{ xs: 1.5, sm: 3 }} mb={{ xs: 3, sm: 6 }} id="tour-analytics">
+
       {cards.map((card, index) => (
         <Grid2 key={index} size={{ xs: 6, sm: 6, md: 3 }}>
           <Box

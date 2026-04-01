@@ -11,14 +11,18 @@ import { getAttendances } from '../../services/attendanceService';
 import { FINAL_CLASS_STATUS } from '../../constants';
 import { IFinalClass } from '../../types';
 import SubmitAttendanceModal from './SubmitAttendanceModal';
+import { useDemoMode } from '../../hooks/useDemoMode';
 import ClassCard from '../parents/ClassCard';
+
 import { getSubjectList, getOptionLabel } from '../../utils/subjectUtils';
 
 const TodayScheduleCard: React.FC = () => {
   const user = useSelector(selectCurrentUser);
   const navigate = useNavigate();
+  const { isDemoMode, getDemoClasses } = useDemoMode();
   const [classes, setClasses] = useState<IFinalClass[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
   const [error, setError] = useState<string | null>(null);
   const [selectedClass, setSelectedClass] = useState<IFinalClass | null>(null);
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
@@ -30,7 +34,8 @@ const TodayScheduleCard: React.FC = () => {
       setError(null);
       const tutorId = (user as any).id || (user as any)._id;
       const resp = await getMyClasses(tutorId, FINAL_CLASS_STATUS.ACTIVE, 1, 50);
-      const all = resp.data || [];
+      const all = getDemoClasses(resp.data || []);
+
 
       const todayIndex = new Date().getDay();
       const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
@@ -179,7 +184,9 @@ const TodayScheduleCard: React.FC = () => {
 
   return (
     <>
+    <Box id="tour-today">
       <Card sx={{ ...cardSx, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible' }}>
+
         <CardContent sx={{ display: 'flex', flexDirection: 'column', p: { xs: 3, sm: 4 }, height: '100%' }}>
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={4}>
             <Box display="flex" alignItems="center" gap={2}>
@@ -265,6 +272,8 @@ const TodayScheduleCard: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+    </Box>
+
 
 
       {selectedClass && attendanceModalOpen && (

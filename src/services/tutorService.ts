@@ -112,11 +112,12 @@ export const updateVerificationStatus = async (
   tutorId: string,
   status: string,
   verificationNotes?: string,
-  whatsappCommunityJoined?: boolean
+  whatsappCommunityJoined?: boolean,
+  rejectionReason?: string
 ): Promise<ApiResponse<ITutor>> => {
   const { data } = await api.patch(
     `${API_ENDPOINTS.TUTORS_VERIFICATION_STATUS(tutorId)}`,
-    { status, verificationNotes, whatsappCommunityJoined }
+    { status, verificationNotes, whatsappCommunityJoined, rejectionReason }
   );
   return data as ApiResponse<ITutor>;
 };
@@ -148,9 +149,14 @@ export const updateVerificationFeeStatus = async (
   return data as ApiResponse<ITutor>;
 };
 
-export const deductTutorVerificationFee = async (tutorId: string): Promise<ApiResponse<any>> => {
-  const { data } = await api.post(`${API_ENDPOINTS.TUTORS}/${tutorId}/deduct-verification-fee`);
-  return data as ApiResponse<any>;
+export const submitVerification = async (tutorId: string): Promise<ApiResponse<ITutor>> => {
+  const { data } = await api.post(`${API_ENDPOINTS.TUTORS}/${tutorId}/submit-verification`);
+  return data as ApiResponse<ITutor>;
+};
+
+export const deductTutorVerificationFee = async (tutorId: string): Promise<ApiResponse<ITutor>> => {
+  const { data } = await api.post(API_ENDPOINTS.TUTORS_DEDUCT_VERIFICATION_FEE(tutorId));
+  return data as ApiResponse<ITutor>;
 };
 
 export const getPendingVerifications = async (): Promise<ApiResponse<ITutor[]>> => {

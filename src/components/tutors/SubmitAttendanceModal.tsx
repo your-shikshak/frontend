@@ -21,6 +21,8 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { createAttendance } from '../../services/attendanceService';
 import { STUDENT_ATTENDANCE_STATUS } from '../../constants';
 import { IFinalClass } from '../../types';
+import { useDemoMode } from '../../hooks/useDemoMode';
+
 
 interface SubmitAttendanceModalProps {
   open: boolean;
@@ -34,7 +36,9 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 const SubmitAttendanceModal: React.FC<SubmitAttendanceModalProps> = ({ open, onClose, finalClass, onSuccess }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { isDemoMode } = useDemoMode();
   const [sessionDate, setSessionDate] = useState<string>(todayStr());
+
   const [topicCovered, setTopicCovered] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [studentAttendanceStatus, setStudentAttendanceStatus] = useState<string>(
@@ -64,7 +68,13 @@ const SubmitAttendanceModal: React.FC<SubmitAttendanceModalProps> = ({ open, onC
     if (!open || !finalClass.id || !sessionDate) return;
     try {
       setChecking(true);
+      if (isDemoMode) {
+        setAlreadyMarked(false);
+        setChecking(false);
+        return;
+      }
       // We could optimize this with a specific API, but fetching class attendance is reusing existing endpoint
+
       // Adjust import if needed: getAttendanceByClass is in services/attendanceService
       const { getAttendanceByClass } = await import('../../services/attendanceService');
       const res = await getAttendanceByClass(finalClass.id);

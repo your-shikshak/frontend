@@ -44,6 +44,7 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import SnackbarNotification from '../../components/common/SnackbarNotification';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
+import RejectionDialog from '../../components/tutors/RejectionDialog';
 import { Eye } from 'lucide-react';
 
 const getDocumentComponent = (url: string) => {
@@ -146,11 +147,11 @@ const TutorVerificationDetailsPage: React.FC = () => {
         }
     };
 
-    const handleReject = async () => {
+    const handleReject = async (reason: string) => {
         if (!tutor) return;
         try {
             setActionLoading(true);
-            await tutorService.updateVerificationStatus(tutor.id, 'REJECTED');
+            await tutorService.updateVerificationStatus(tutor.id, 'REJECTED', undefined, undefined, reason);
             setSnackbar({ open: true, message: 'Tutor rejected', severity: 'success' });
             setRejectDropdownOpen(false);
             fetchTutor();
@@ -374,15 +375,12 @@ const TutorVerificationDetailsPage: React.FC = () => {
                 severity="success"
             />
 
-            <ConfirmDialog
+            <RejectionDialog
                 open={rejectDropdownOpen}
                 title="Reject Tutor"
-                message={`Are you sure you want to reject ${tutor.user.name}?`}
-                confirmText="Yes, Reject"
                 onConfirm={handleReject}
                 onClose={() => setRejectDropdownOpen(false)}
                 loading={actionLoading}
-                severity="error"
             />
 
             <SnackbarNotification

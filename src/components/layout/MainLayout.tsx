@@ -4,14 +4,16 @@ import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import TutorMobileAppBar from './TutorMobileAppBar';
 import Sidebar from './Sidebar';
+import { TutorGuidedTour } from '../common/TutorGuidedTour';
 import PermissionDeniedDialog from '../common/PermissionDeniedDialog';
+
 import TutorBottomNav from '../tutors/TutorBottomNav';
 import { useSelector, useDispatch } from 'react-redux';
 import { hidePermissionDenied, selectPermissionDeniedOpen, selectSidebarWidth, setSidebarWidth } from '../../store/slices/uiSlice';
 import { selectCurrentUser, setAcceptedTerms, updateUser } from '../../store/slices/authSlice';
 import TermsAndConditionsModal from '../common/TermsAndConditionsModal';
 import WhatsAppCommunityModal from '../common/WhatsAppCommunityModal';
-import ManagerProfileCompletionModal from '../manager/ManagerProfileCompletionModal';
+import ProfileCompletionModal from '../common/ProfileCompletionModal';
 import { acceptTerms, } from '../../services/authService';
 import { expressInterest } from '../../services/announcementService';
 import { updateMyProfile } from '../../services/tutorService';
@@ -37,6 +39,8 @@ const MainLayout: React.FC = () => {
   const user = useSelector(selectCurrentUser);
   const [whatsappConfirmed, setWhatsappConfirmed] = useState(false);
   const { options: cityOptions } = useOptions('CITY');
+  const [showTour, setShowTour] = useState(false);
+
 
   // Handle pending interest from public page
   React.useEffect(() => {
@@ -82,6 +86,13 @@ const MainLayout: React.FC = () => {
     }
   }, [user?.role, user?.verificationStatus, refreshProfile]);
 
+  React.useEffect(() => {
+    const handleStartTour = () => setShowTour(true);
+    window.addEventListener('shikshak_start_tour', handleStartTour);
+    return () => window.removeEventListener('shikshak_start_tour', handleStartTour);
+  }, []);
+
+
   const communityLink = React.useMemo(() => {
     if (!user?.city || !cityOptions.length) return undefined;
 
@@ -101,7 +112,7 @@ const MainLayout: React.FC = () => {
   const isOfflineTutor = user?.role === USER_ROLES.TUTOR && user?.preferredMode === TEACHING_MODE.OFFLINE;
   const showWhatsapp = user !== null && isOfflineTutor && !user.acceptedTerms && !whatsappConfirmed;
   const showTerms = user !== null && !user.acceptedTerms && (!isOfflineTutor || whatsappConfirmed);
-  const showManagerProfileGate = user?.role === USER_ROLES.MANAGER && !user.isProfileComplete && user.acceptedTerms;
+  const showProfileGate = (user?.role === USER_ROLES.MANAGER || user?.role === USER_ROLES.COORDINATOR) && !user.isProfileComplete && user.acceptedTerms;
   const showTutorBottomNav = user?.role === USER_ROLES.TUTOR;
 
   const handleDrawerToggle = () => setMobileOpen((prev) => !prev);
@@ -224,8 +235,13 @@ const MainLayout: React.FC = () => {
           }
         }}
       />
-      <ManagerProfileCompletionModal open={showManagerProfileGate} />
+      <ProfileCompletionModal open={showProfileGate} />
+      <TutorGuidedTour 
+        isActive={showTour} 
+        onClose={() => setShowTour(false)} 
+      />
     </Box>
+
   );
 };
 

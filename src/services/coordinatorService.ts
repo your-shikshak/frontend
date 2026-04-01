@@ -7,6 +7,11 @@ export const getDashboardStats = async (): Promise<ApiResponse<ICoordinatorDashb
   return data as ApiResponse<ICoordinatorDashboardStats>;
 };
 
+export const getMyProfile = async (): Promise<ApiResponse<any>> => {
+  const { data } = await api.get(API_ENDPOINTS.COORDINATORS_MY_PROFILE);
+  return data as ApiResponse<any>;
+};
+
 export const getTodaysTasks = async (): Promise<ApiResponse<ICoordinatorTodaysTasks>> => {
   const { data } = await api.get(API_ENDPOINTS.COORDINATORS_DASHBOARD_TASKS);
   return data as ApiResponse<ICoordinatorTodaysTasks>;
@@ -204,6 +209,7 @@ export default {
   getAssignedClasses, 
   getPaymentSummary, 
   getProfileMetrics, 
+  getMyProfile,
   getCoordinatorByUserId, 
   createCoordinator, 
   getEligibleCoordinatorUsers, 

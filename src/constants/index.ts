@@ -252,6 +252,7 @@ export const API_ENDPOINTS = {
   TUTORS_VERIFICATION_STATUS: (id: string) => `/api/tutors/${id}/verification-status`,
   TUTORS_DOCUMENTS: (id: string) => `/api/tutors/${id}/documents`,
   TUTORS_DELETE_DOCUMENT: (id: string, docIndex: number) => `/api/tutors/${id}/documents/${docIndex}`,
+  TUTORS_DEDUCT_VERIFICATION_FEE: (id: string) => `/api/tutors/${id}/deduct-verification-fee`,
   // Notifications endpoints
   NOTIFICATIONS: '/api/notifications',
   NOTIFICATIONS_UNREAD_COUNT: '/api/notifications/unread-count',
@@ -287,6 +288,7 @@ export const API_ENDPOINTS = {
     parentId ? `/api/notes/parent/my-notes?parentId=${parentId}` : '/api/notes/parent/my-notes',
   // Coordinator endpoints
   COORDINATORS_DASHBOARD_STATS: '/api/coordinators/dashboard/stats',
+  COORDINATORS_MY_PROFILE: '/api/coordinators/my-profile',
   COORDINATORS_DASHBOARD_TASKS: '/api/coordinators/dashboard/tasks',
   COORDINATORS_ASSIGNED_CLASSES: '/api/coordinators/assigned-classes',
   COORDINATOR_PAYMENTS_SUMMARY: '/api/coordinators/payments/summary',

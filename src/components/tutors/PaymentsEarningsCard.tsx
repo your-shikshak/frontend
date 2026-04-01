@@ -26,15 +26,19 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import { useDemoMode } from '../../hooks/useDemoMode';
+
 import { getMyPaymentSummary } from '../../services/paymentService';
 import { IPayment } from '../../types';
 import { PAYMENT_TYPE } from '../../constants';
 
 const PaymentsEarningsCard: React.FC = () => {
+  const { isDemoMode, getDemoPayments } = useDemoMode();
   const [payments, setPayments] = useState<IPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState(0);
+
   const [selectedMonth, setSelectedMonth] = useState<string>('');
 
   useEffect(() => {
@@ -42,8 +46,8 @@ const PaymentsEarningsCard: React.FC = () => {
       try {
         setLoading(true);
         const res = await getMyPaymentSummary({ paymentType: PAYMENT_TYPE.TUTOR_PAYOUT });
-        console.log('Fetched Payments:', res.data.payments);
-        setPayments(res.data.payments || []);
+        setPayments(getDemoPayments(res.data.payments || []));
+
       } catch (err: any) {
         setError(err.message || 'Failed to load payments');
       } finally {
@@ -92,7 +96,8 @@ const PaymentsEarningsCard: React.FC = () => {
   );
 
   return (
-    <Box>
+    <Box id="tour-payments">
+
       {/* ─── KPI Stat Cards Row ──────────────────── */}
       <Grid container spacing={{ xs: 1, sm: 2.5 }} mb={{ xs: 2.5, sm: 4 }}>
         {/* Total Earnings */}
@@ -530,6 +535,7 @@ const PaymentsEarningsCard: React.FC = () => {
         </CardContent>
       </Card>
     </Box>
+
   );
 };
 

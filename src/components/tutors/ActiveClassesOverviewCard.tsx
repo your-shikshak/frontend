@@ -9,10 +9,14 @@ import { getMyClasses } from '../../services/finalClassService';
 import { FINAL_CLASS_STATUS } from '../../constants';
 import { IFinalClass } from '../../types';
 import { getLeafSubjectList } from '../../utils/subjectUtils';
+import { useDemoMode } from '../../hooks/useDemoMode';
+
 
 const ActiveClassesOverviewCard: React.FC = () => {
   const user = useSelector(selectCurrentUser);
+  const { isDemoMode, getDemoClasses } = useDemoMode();
   const [classes, setClasses] = useState<IFinalClass[]>([]);
+
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +27,8 @@ const ActiveClassesOverviewCard: React.FC = () => {
       setError(null);
       const tutorId = (user as any).id || (user as any)._id;
       const resp = await getMyClasses(tutorId, FINAL_CLASS_STATUS.ACTIVE, 1, 50);
-      setClasses(resp.data || []);
+      setClasses(getDemoClasses(resp.data || []));
+
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || 'Failed to load active classes.';
       setError(msg);
@@ -105,7 +110,8 @@ const ActiveClassesOverviewCard: React.FC = () => {
   }
 
   return (
-    <Card sx={cardSx}>
+    <Card sx={cardSx} id="tour-portfolio-list">
+
       <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
         <Box mb={4} display="flex" alignItems="center" justifyContent="space-between">
           <Box display="flex" alignItems="center" gap={2}>

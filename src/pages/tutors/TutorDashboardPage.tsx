@@ -25,6 +25,7 @@ import ActiveClassesOverviewCard from "../../components/tutors/ActiveClassesOver
 import ClassLeadsFeedCard from "../../components/tutors/ClassLeadsFeedCard";
 import DemoClassesCard from "../../components/tutors/DemoClassesCard";
 import VerificationFeeModal from "../../components/tutors/VerificationFeeModal";
+import VerificationRejectedModal from "../../components/tutors/VerificationRejectedModal";
 import { ITutor } from "../../types";
 import { getMyProfile, updateVerificationFeeStatus } from "../../services/tutorService";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ const TutorDashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCompleteProfileModal, setShowCompleteProfileModal] = useState(false);
   const [showVerificationFeeModal, setShowVerificationFeeModal] = useState(false);
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [tutorProfile, setTutorProfile] = useState<ITutor | null>(null);
 
   useEffect(() => {
@@ -76,6 +78,22 @@ const TutorDashboardPage: React.FC = () => {
           try {
             if (typeof window !== 'undefined') {
               window.sessionStorage.setItem('ys_tutor_complete_profile_prompt_shown', 'true');
+            }
+          } catch {
+            // ignore storage errors
+          }
+        }
+
+        // Check for rejection modal
+        const rejectionShown =
+          typeof window !== 'undefined' &&
+          window.sessionStorage.getItem('ys_tutor_rejection_modal_shown') === 'true';
+
+        if (tutor.verificationStatus === 'REJECTED' && !rejectionShown && !cancelled) {
+          setShowRejectionModal(true);
+          try {
+            if (typeof window !== 'undefined') {
+              window.sessionStorage.setItem('ys_tutor_rejection_modal_shown', 'true');
             }
           } catch {
             // ignore storage errors
@@ -514,6 +532,13 @@ const TutorDashboardPage: React.FC = () => {
         open={showVerificationFeeModal}
         onClose={() => setShowVerificationFeeModal(false)}
         onSubmit={handleVerificationFeeSubmit}
+      />
+
+      {/* Verification Rejected Modal */}
+      <VerificationRejectedModal
+        open={showRejectionModal}
+        onClose={() => setShowRejectionModal(false)}
+        reason={tutorProfile?.verificationRejectionReason}
       />
 
     </Container>

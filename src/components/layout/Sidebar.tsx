@@ -1,5 +1,5 @@
-import React from 'react';
-import { Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Box, Typography, alpha, Tooltip } from '@mui/material';
+import React, { useEffect } from 'react';
+import { Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Box, Typography, alpha, Tooltip, Switch, IconButton } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { NAVIGATION_ITEMS, USER_ROLES, VERIFICATION_STATUS } from '../../constants';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -33,6 +33,8 @@ import RecentActorsIcon from '@mui/icons-material/RecentActors';
 import CastForEducationIcon from '@mui/icons-material/CastForEducation';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../../store/slices/authSlice';
+import { Sparkles } from 'lucide-react';
+import { useDemoMode } from '../../hooks/useDemoMode';
 
 export interface SidebarProps {
   open: boolean;
@@ -114,6 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, drawerWidth = 280, onR
   const navigate = useNavigate();
   const location = useLocation();
   const user = useSelector(selectCurrentUser);
+  const { isDemoMode, toggleDemoMode } = useDemoMode();
   const userRole = (user?.role as string) || '';
   const isCollapsed = drawerWidth < 180;
 
@@ -237,6 +240,66 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, drawerWidth = 280, onR
           );
         })}
       </List>
+
+      {userRole === USER_ROLES.TUTOR && (
+        <Box sx={{ px: 2, mb: 1, mt: 'auto' }}>
+          <Box 
+            sx={{ 
+              p: isCollapsed ? 1 : 2, 
+              borderRadius: 2, 
+              bgcolor: isDemoMode ? alpha('#fbbf24', 0.1) : alpha('#6366f1', 0.04), 
+              border: isDemoMode ? `1px solid ${alpha('#fbbf24', 0.2)}` : `1px solid ${alpha('#6366f1', 0.1)}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'space-between',
+              transition: 'all 0.3s ease',
+              mb: 1
+            }}
+          >
+            <Box display="flex" alignItems="center" gap={1.5}>
+              <Sparkles size={18} color={isDemoMode ? '#fbbf24' : '#64748b'} strokeWidth={isDemoMode ? 3 : 2} />
+              {!isCollapsed && (
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: isDemoMode ? '#b45309' : '#0f172a', fontSize: '0.75rem', lineHeight: 1.2 }}>
+                    Demo Mode
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.6rem', display: 'block' }}>
+                    Preview Logic
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+            {!isCollapsed && (
+              <Box display="flex" alignItems="center" gap={0.5}>
+                {isDemoMode && (
+                  <Tooltip title="Start Tour">
+                    <IconButton 
+                      size="small" 
+                      onClick={() => window.dispatchEvent(new CustomEvent('shikshak_start_tour'))}
+                      sx={{ color: '#fbbf24', p: 0.5 }}
+                    >
+                      <Box sx={{ fontSize: '0.9rem', fontWeight: 900 }}>🚀</Box>
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <Switch 
+                  size="small" 
+                  checked={isDemoMode} 
+                  onChange={toggleDemoMode}
+                  sx={{
+                    '& .MuiSwitch-switchBase.Mui-checked': {
+                      color: '#fbbf24',
+                    },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                      backgroundColor: '#fbbf24',
+                    },
+                  }}
+                />
+              </Box>
+            )}
+          </Box>
+        </Box>
+      )}
 
       <Box sx={{ p: 3, display: isCollapsed ? 'none' : 'block' }}>
         <Box 
