@@ -7,7 +7,7 @@ import AppThemeProvider from './theme/ThemeProvider';
 import App from './App';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import './styles/global.css';
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react"
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
