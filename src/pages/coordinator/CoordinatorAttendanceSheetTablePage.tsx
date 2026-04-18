@@ -23,6 +23,8 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { getCoordinatorSessionsForCycle } from '../../services/classSessionService';
+import MarkUpcomingAttendanceModal from '../../components/coordinator/MarkUpcomingAttendanceModal';
+
 
 type TabKey = 'upcoming' | 'completed';
 
@@ -90,6 +92,11 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
 
   const [payoutSummary, setPayoutSummary] = useState<PayoutStatus | null>(null);
   const [cycleSessions, setCycleSessions] = useState<any[]>([]);
+
+  // Modal State
+  const [markModalOpen, setMarkModalOpen] = useState(false);
+  const [selectedSessionRow, setSelectedSessionRow] = useState<SessionRow | null>(null);
+
 
   const coordinatorUserId = (user as any)?.id || (user as any)?._id;
 
@@ -358,10 +365,33 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
               <Typography variant="body2" color={row.type === 'UPCOMING' ? 'info.main' : 'success.main'}>
                   {row.type}
               </Typography>
-          );
+        );
+      }
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      flex: 0.8,
+      sortable: false,
+      renderCell: (params) => {
+        const row = params.row as SessionRow;
+        if (row.type !== 'UPCOMING') return null;
+        return (
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              setSelectedSessionRow(row);
+              setMarkModalOpen(true);
+            }}
+          >
+            Mark
+          </Button>
+        );
       }
     }
   ], []);
+
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -478,7 +508,25 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
           )}
         </Box>
       </Paper>
+
+      {selectedSessionRow && (
+        <MarkUpcomingAttendanceModal
+          open={markModalOpen}
+          onClose={() => {
+            setMarkModalOpen(false);
+            setSelectedSessionRow(null);
+          }}
+          finalClassId={selectedSessionRow.classId}
+          studentName={selectedSessionRow.studentName}
+          sessionDate={selectedSessionRow.sessionDateTimeIso}
+          initialDuration={(selectedSessionRow.finalClass as any)?.classLead?.classDurationHours || 1}
+          onSuccess={() => {
+            void loadSheetsForClass();
+          }}
+        />
+      )}
     </Container>
+
   );
 };
 
