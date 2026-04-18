@@ -210,7 +210,7 @@ const App: React.FC = () => {
                 <Route
                   path="attendance-sheet-approvals"
                   element={
-                    <ProtectedRoute allowedRoles={[USER_ROLES.COORDINATOR]}>
+                    <ProtectedRoute allowedRoles={[USER_ROLES.COORDINATOR, USER_ROLES.ADMIN]}>
                       <AttendanceSheetApprovalsPage />
                     </ProtectedRoute>
                   }

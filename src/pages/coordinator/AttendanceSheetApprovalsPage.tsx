@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSelector } from 'react-redux';
+import { selectCurrentUser } from '../../store/slices/authSlice';
+import { USER_ROLES } from '../../constants';
 import {
   Container,
   Typography,
@@ -40,6 +43,7 @@ import AutorenewIcon from '@mui/icons-material/Autorenew';
 import AttendanceSheet from '../../components/tutors/AttendanceSheet';
 import {
   getCoordinatorPendingSheets,
+  getAllPendingSheets,
   approveAttendanceSheet,
   rejectAttendanceSheet,
 } from '../../services/attendanceSheetService';
@@ -51,6 +55,7 @@ import SnackbarNotification from '../../components/common/SnackbarNotification';
 
 const AttendanceSheetApprovalsPage: React.FC = () => {
   const theme = useTheme();
+  const user = useSelector(selectCurrentUser);
   const [sheets, setSheets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +128,8 @@ const AttendanceSheetApprovalsPage: React.FC = () => {
   const fetchSheets = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await getCoordinatorPendingSheets();
+      const isAdmin = user?.role === USER_ROLES.ADMIN;
+      const response = await (isAdmin ? getAllPendingSheets() : getCoordinatorPendingSheets());
       if (response.success) {
         setSheets(response.data || []);
       } else {

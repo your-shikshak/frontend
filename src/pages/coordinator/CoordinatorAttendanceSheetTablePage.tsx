@@ -105,8 +105,11 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Fetch classes assigned to this coordinator
-      const res = await getFinalClasses(1, 500, { coordinatorId: coordinatorUserId, status: FINAL_CLASS_STATUS.ACTIVE });
+      const isAdmin = user?.role === USER_ROLES.ADMIN;
+      const res = await getFinalClasses(1, 500, { 
+        ...(isAdmin ? {} : { coordinatorId: coordinatorUserId }), 
+        status: FINAL_CLASS_STATUS.ACTIVE 
+      });
       const list = (res.data || []) as any[];
       setClasses(list);
       if (!selectedClassId && list.length > 0) {
