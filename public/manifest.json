@@ -1,0 +1,42 @@
+{
+  "name": "Your Shikshak - Home Tutoring Platform",
+  "short_name": "Your Shikshak",
+  "description": "India's No.1 Personalised Home Tutoring Platform with 10,000+ verified tutors in Bhopal & Indore.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1e40af",
+  "theme_color": "#1e40af",
+  "lang": "en-IN",
+  "categories": ["education"],
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/1.jpg",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Your Shikshak Home"
+    }
+  ],
+  "prefer_related_applications": false
+}

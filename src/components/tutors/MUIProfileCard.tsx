@@ -1064,8 +1064,10 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
           ) : feeAction === 'PAY_NOW' ? (
             <div className="space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="p-4 bg-white rounded-2xl border border-slate-200 inline-block shadow-lg">
-                {/* Placeholder QR */}
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=example@upi&pn=YourShikshak" alt="Payment QR" className="w-40 h-40 mx-auto" />
+                {/* Verification QR */}
+                <img src="/verification-qr.png" alt="Payment QR" className="w-40 h-40 mx-auto" />
+                {/* Old dynamic QR - kept for future payment gateway integration reference if needed */}
+                {/* <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=example@upi&pn=YourShikshak" alt="Payment QR" className="w-40 h-40 mx-auto" /> */}
               </div>
               <p className="text-sm text-slate-500 font-bold">Scan to Pay Subscription Fee</p>
 

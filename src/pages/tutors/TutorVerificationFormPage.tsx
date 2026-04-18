@@ -478,6 +478,29 @@ const TutorVerificationFormPage: React.FC = () => {
                   Important: It is mandatory to upload all required documents for verification.
                 </Typography>
               </Alert>
+              <Alert severity="info" sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                  Verification Submission Guidelines
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  • Upload both sides of your Aadhaar or government-issued ID combined into a single PDF file.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  • Ensure your name, address, and age match exactly in your profile and in every uploaded document.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  • Pay the verification fee as ₹500 only; do not pay more or less. Upload a clear screenshot of the successful payment.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  • Verification may be rejected if any information is incorrect, inconsistent, misleading, or appears false.
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  • Select a verification fee option carefully — changes are not allowed after selection.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  • If your verification is rejected, read the rejection notes carefully and reapply, or contact your manager for assistance.
+                </Typography>
+              </Alert>
             </Box>
 
             {/* Document Requirements Info */}

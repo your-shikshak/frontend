@@ -326,26 +326,38 @@ export default function ClassLeadDetailPage() {
     const publicUrl = `${window.location.origin}/leads/public/${id}`;
 
     const lines: string[] = [];
-    lines.push('📢 Your Shikshak Requirement');
+    // lines.push('📢 Your Shikshak Requirement');               // ORIGINAL (reverts emoji fix)
+    lines.push('\u{1F4E2} Your Shikshak Requirement');
     lines.push('');
-    if (gradeLabel) lines.push(`📚 Class: ${gradeLabel}`);
-    if (boardLabel) lines.push(`📋 Board: ${boardLabel}`);
-    if (subjectsLabel) lines.push(`📖 Subject: ${subjectsLabel}.`);
-    lines.push(`🚻 Gender:  ${tutorGenderLabel}`);
-    if (fees) lines.push(`💰 Fees: ${fees}`);
-    if (sessionLine) lines.push(`⏳ Session: ${sessionLine}${sessionSuffix}`);
-    lines.push(`🕒 Time: ${timing}`);
+    // if (gradeLabel) lines.push(`📚 Class: ${gradeLabel}`);    // ORIGINAL
+    if (gradeLabel) lines.push(`\u{1F4DA} Class: ${gradeLabel}`);
+    // if (boardLabel) lines.push(`📋 Board: ${boardLabel}`);    // ORIGINAL
+    if (boardLabel) lines.push(`\u{1F4CB} Board: ${boardLabel}`);
+    // if (subjectsLabel) lines.push(`📖 Subject: ${subjectsLabel}.`);  // ORIGINAL
+    if (subjectsLabel) lines.push(`\u{1F4D6} Subject: ${subjectsLabel}.`);
+    // lines.push(`🚻 Gender:  ${tutorGenderLabel}`);            // ORIGINAL
+    lines.push(`\u{1F6BB} Gender:  ${tutorGenderLabel}`);
+    // if (fees) lines.push(`💰 Fees: ${fees}`);                 // ORIGINAL
+    if (fees) lines.push(`\u{1F4B0} Fees: ${fees}`);
+    // if (sessionLine) lines.push(`⏳ Session: ${sessionLine}${sessionSuffix}`);  // ORIGINAL
+    if (sessionLine) lines.push(`\u{23F3} Session: ${sessionLine}${sessionSuffix}`);
+    // lines.push(`🕒 Time: ${timing}`);                         // ORIGINAL
+    lines.push(`\u{1F552} Time: ${timing}`);
     lines.push('');
     if (locationText) {
-      lines.push(`📌 Location: ${locationText}.`);
+      // lines.push(`📌 Location: ${locationText}.`);            // ORIGINAL
+      lines.push(`\u{1F4CC} Location: ${locationText}.`);
       lines.push('');
     }
     if (noteText) {
-      lines.push(`🗒️Note: ${noteText}`);
+      // lines.push(`🗒️Note: ${noteText}`);                      // ORIGINAL
+      lines.push(`\u{1F5D2}\uFE0FNote: ${noteText}`);
       lines.push('');
     }
-    lines.push('📞 For More Details, Contact:');
-    lines.push('📱 +91-9244947668');
+    // lines.push('📞 For More Details, Contact:');               // ORIGINAL
+    lines.push('\u{1F4DE} For More Details, Contact:');
+    // lines.push('📱 +91-9244947668');                           // ORIGINAL
+    lines.push('\u{1F4F1} +91-9244947668');
     lines.push('');
     lines.push('To Express interest or share with your friends click the link below!');
     lines.push(publicUrl);
