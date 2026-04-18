@@ -1150,29 +1150,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
         document={viewingDocument}
       />
       {/* Exit Demo FAB */}
-      {isDemoMode && (
-        <Button
-          variant="contained"
-          onClick={toggleDemoMode}
-          startIcon={<StopCircle size={20} />}
-          sx={{
-            position: 'fixed',
-            bottom: 32,
-            right: 32,
-            zIndex: 1000,
-            borderRadius: '20px',
-            bgcolor: '#ef4444',
-            '&:hover': { bgcolor: '#dc2626' },
-            boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)',
-            textTransform: 'none',
-            fontWeight: 800,
-            px: 3,
-            py: 1.5
-          }}
-        >
-          Exit Demo Mode
-        </Button>
-      )}
+      
     </div >
   );
 };
