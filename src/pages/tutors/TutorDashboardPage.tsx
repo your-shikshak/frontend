@@ -12,6 +12,7 @@ import {
   Tab,
   useMediaQuery,
   alpha,
+  Alert,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
@@ -32,6 +33,7 @@ import { toast } from "sonner";
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import WavingHandIcon from '@mui/icons-material/WavingHand';
 import { useTheme } from '@mui/material/styles';
+import { XCircle, AlertCircle } from 'lucide-react';
 
 const TutorDashboardPage: React.FC = () => {
   const user = useSelector(selectCurrentUser);
@@ -310,6 +312,39 @@ const TutorDashboardPage: React.FC = () => {
               >
                 {/* Banner content remains functional */}
               </Card>
+            )}
+            {tutorProfile?.verificationStatus === 'REJECTED' && (
+              <Box mb={4}>
+                <Alert 
+                  severity="error" 
+                  variant="filled"
+                  icon={<XCircle size={24} />}
+                  action={
+                    <Button 
+                      color="inherit" 
+                      size="small" 
+                      onClick={() => navigate('/tutor-verification-form')}
+                      sx={{ fontWeight: 800, textTransform: 'none', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '8px' }}
+                    >
+                      Fix Verification Errors
+                    </Button>
+                  }
+                  sx={{ 
+                    borderRadius: '16px', 
+                    boxShadow: '0 8px 16px rgba(239, 68, 68, 0.2)',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={800} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Verification Rejected
+                    </Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {tutorProfile.verificationRejectionReason || "Please review your documents and re-submit for verification."}
+                    </Typography>
+                  </Box>
+                </Alert>
+              </Box>
             )}
             <TutorAdvancedAnalyticsCards />
 

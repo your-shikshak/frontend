@@ -1,9 +1,9 @@
-import { CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Button, Avatar, Grid, Chip, Divider, Box, Tooltip, alpha, Typography, useTheme } from '@mui/material';
+import { CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Button, Avatar, Grid, Chip, Divider, Box, Tooltip, alpha, Typography, useTheme, Alert } from '@mui/material';
 import {
   User, Phone, Mail, Calendar, MapPin, GraduationCap, Briefcase, Clock,
   FileText, CheckCircle, Star, Award, BookOpen, Languages, Sparkles,
   BarChart2, ShieldCheck, Info, Heart, ExternalLink, CreditCard, Wallet, Handshake,
-  ShieldAlert, Eye, ScanLine
+  ShieldAlert, Eye, ScanLine, XCircle
 } from 'lucide-react';
 import { ITutor, IDocument } from '../../types';
 import { getMyProfile, uploadDocument, getTutorById, updateVerificationFeeStatus } from '../../services/tutorService';
@@ -636,6 +636,22 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                   <span className="text-slate-700 font-black font-['Manrope'] text-xs opacity-60">{new Date(displayTutor.verifiedAt).toLocaleDateString()}</span>
                 </div>
               )}
+              {displayTutor.verificationStatus === 'REJECTED' && displayTutor.verificationRejectionReason && (
+                <Box mt={2}>
+                  <Alert 
+                    severity="error" 
+                    icon={<XCircle size={20} />}
+                    sx={{ borderRadius: '16px', border: '1px solid', borderColor: 'error.light' }}
+                  >
+                    <Typography variant="caption" fontWeight={800} display="block" sx={{ textTransform: 'uppercase', mb: 0.5 }}>
+                      Verification Rejected
+                    </Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {displayTutor.verificationRejectionReason}
+                    </Typography>
+                  </Alert>
+                </Box>
+              )}
               {displayTutor.verificationNotes && (
                 <div className="mt-4 p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-2 flex items-center gap-1.5 font-['Manrope']">
@@ -903,9 +919,11 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 const canUpload = (isTutorSelf || !tutorId) && !isVerified && (!isThisDocUploaded || (displayTutor.verificationStatus === 'REJECTED'));
 
                 const handleCardClick = () => {
-                  if (isThisDocUploaded) handleOpenViewer(type);
-                  // Modal disabled on profile page as per user request
-                  // else if (canUpload) handleOpenDocumentModal(type);
+                  if (isThisDocUploaded && !canUpload) {
+                    handleOpenViewer(type);
+                  } else if (canUpload) {
+                    handleOpenDocumentModal(type);
+                  }
                 };
 
                 return (

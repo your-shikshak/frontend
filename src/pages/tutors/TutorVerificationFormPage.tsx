@@ -46,6 +46,8 @@ import {
   ChevronLeft,
   Award,
   Briefcase,
+  Save,
+  Trash2,
 } from 'lucide-react';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
 import { getMyProfile, uploadDocument, deleteDocument, updateVerificationFeeStatus, submitVerification } from '../../services/tutorService';
@@ -576,6 +578,20 @@ const TutorVerificationFormPage: React.FC = () => {
               Experience proof is optional.
             </Typography>
 
+            {tutor?.verificationStatus === 'REJECTED' && (
+              <Alert 
+                severity="info" 
+                icon={<AlertCircle size={20} />}
+                sx={{ mb: 3, borderRadius: '12px', bgcolor: alpha('#3b82f6', 0.05), border: '1px solid', borderColor: alpha('#3b82f6', 0.1) }}
+              >
+                <Typography variant="body2" fontWeight={600} color="#1e40af">
+                  Replacing Documents:
+                </Typography>
+                <Typography variant="caption" color="#1e40af">
+                  To update a document, first click the red "X" to delete the current one, then click the card to upload the new version.
+                </Typography>
+              </Alert>
+            )}
             <Grid container spacing={isMobile ? 2 : 3}>
               {docTypes.map((docType) => {
                 const doc = documents[docType.type];
@@ -711,7 +727,7 @@ const TutorVerificationFormPage: React.FC = () => {
                               height: 24,
                             }}
                           >
-                            <XCircle size={14} />
+                            <XCircle size={18} />
                           </IconButton>
                         )}
 
