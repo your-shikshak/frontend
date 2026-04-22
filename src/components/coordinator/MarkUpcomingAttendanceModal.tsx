@@ -18,7 +18,8 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import { createAttendance } from '../../services/attendanceService';
-import { STUDENT_ATTENDANCE_STATUS } from '../../constants';
+import { STUDENT_ATTENDANCE_STATUS, USER_ROLES } from '../../constants';
+import { useAuth } from '../../hooks/useAuth';
 
 interface MarkUpcomingAttendanceModalProps {
   open: boolean;
@@ -41,6 +42,9 @@ const MarkUpcomingAttendanceModal: React.FC<MarkUpcomingAttendanceModalProps> = 
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { user } = useAuth();
+  const isAdmin = user?.role === USER_ROLES.ADMIN;
+  const isCoordinator = user?.role === USER_ROLES.COORDINATOR;
 
   const [topicCovered, setTopicCovered] = useState<string>('');
   const [durationHours, setDurationHours] = useState<number>(initialDuration);
@@ -128,8 +132,8 @@ const MarkUpcomingAttendanceModal: React.FC<MarkUpcomingAttendanceModalProps> = 
             label="Duration (Hours)"
             type="number"
             fullWidth
+            disabled
             value={durationHours}
-            onChange={(e) => setDurationHours(Number(e.target.value))}
             inputProps={{ step: 0.5, min: 0.5 }}
           />
           <TextField
@@ -140,8 +144,15 @@ const MarkUpcomingAttendanceModal: React.FC<MarkUpcomingAttendanceModalProps> = 
             onChange={(e) => setStudentAttendanceStatus(e.target.value)}
           >
             <MenuItem value={STUDENT_ATTENDANCE_STATUS.PRESENT}>Present</MenuItem>
-            <MenuItem value={STUDENT_ATTENDANCE_STATUS.ABSENT}>Absent</MenuItem>
-            <MenuItem value={STUDENT_ATTENDANCE_STATUS.LATE}>Late</MenuItem>
+            {(isAdmin || isCoordinator) && (
+              <MenuItem value={STUDENT_ATTENDANCE_STATUS.NATIONAL_HOLIDAY}>National Holiday</MenuItem>
+            )}
+            {!isAdmin && !isCoordinator && (
+              <>
+                <MenuItem value={STUDENT_ATTENDANCE_STATUS.ABSENT}>Absent</MenuItem>
+                <MenuItem value={STUDENT_ATTENDANCE_STATUS.LATE}>Late</MenuItem>
+              </>
+            )}
           </TextField>
         </Box>
 

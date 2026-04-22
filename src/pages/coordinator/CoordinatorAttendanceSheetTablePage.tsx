@@ -15,14 +15,14 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import DownloadIcon from '@mui/icons-material/Download';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../../store/slices/authSlice';
-import { FINAL_CLASS_STATUS, PAYMENT_TYPE } from '../../constants';
+import { FINAL_CLASS_STATUS, PAYMENT_TYPE, USER_ROLES } from '@/constants';
 import { getFinalClasses } from '../../services/finalClassService';
 import { getAttendanceSheetPayments } from '../../services/attendanceSheetService';
 import PaymentStatusChip from '../../components/payments/PaymentStatusChip';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { getCoordinatorSessionsForCycle } from '../../services/classSessionService';
+import { getClassSessionsForCycle } from '../../services/classSessionService';
 import MarkUpcomingAttendanceModal from '../../components/coordinator/MarkUpcomingAttendanceModal';
 
 
@@ -190,7 +190,12 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
       }
 
       try {
-        const resp = await getCoordinatorSessionsForCycle({ month, year, ensure: true });
+        const resp = await getClassSessionsForCycle({ 
+          classId: selectedClassId, 
+          month, 
+          year, 
+          ensure: true 
+        });
         setCycleSessions(Array.isArray(resp.data) ? resp.data : []);
       } catch {
         setCycleSessions([]);
@@ -261,19 +266,27 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
     const plannedForClass = (cycleSessions || [])
       .filter((s: any) => {
         const fc = s?.finalClass;
-        const id = String(fc?.id || fc?._id || '');
-        return String(selectedClassId) === id;
+        const gc = s?.groupClass;
+        const fcId = String(fc?.id || fc?._id || '');
+        const gcId = String(gc?.id || gc?._id || '');
+        return String(selectedClassId) === fcId || String(selectedClassId) === gcId;
       })
       .map((s: any) => {
         const d = new Date(s.sessionDate);
         if (Number.isNaN(d.getTime())) return null;
+        
+        // Use the populated class data from the session if available, 
+        // fallback to the 'cls' from the dropdown list
+        const classData = s.finalClass || s.groupClass || cls;
+        
         return {
           sessionDateTimeIso: d.toISOString(),
           dateKey: ymd(d),
-          timeSlot: String(s.timeSlot || (cls as any)?.schedule?.timeSlot || ''),
+          timeSlot: String(s.timeSlot || (classData as any)?.schedule?.timeSlot || ''),
+          classData,
         };
       })
-      .filter(Boolean) as Array<{ sessionDateTimeIso: string; dateKey: string; timeSlot: string }>;
+      .filter(Boolean) as Array<{ sessionDateTimeIso: string; dateKey: string; timeSlot: string, classData: any }>;
 
     plannedForClass.sort((a, b) => a.sessionDateTimeIso.localeCompare(b.sessionDateTimeIso));
 
@@ -291,7 +304,7 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
         sessionDateTimeIso: p.sessionDateTimeIso,
         timeSlot: p.timeSlot,
         payoutStatus: null,
-        finalClass: cls,
+        finalClass: p.classData,
       });
 
       if (rows.length >= remaining) break;
@@ -522,7 +535,11 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
           finalClassId={selectedSessionRow.classId}
           studentName={selectedSessionRow.studentName}
           sessionDate={selectedSessionRow.sessionDateTimeIso}
-          initialDuration={(selectedSessionRow.finalClass as any)?.classLead?.classDurationHours || 1}
+          initialDuration={
+            (selectedSessionRow.finalClass as any)?.classLead?.classDurationHours || 
+            (selectedSessionRow as any).groupClass?.classLead?.classDurationHours || 
+            1
+          }
           onSuccess={() => {
             void loadSheetsForClass();
           }}
