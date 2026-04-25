@@ -871,6 +871,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
           </section>
         </Grid>
 
+        {(displayTutor.verificationStatus === 'VERIFIED' || displayTutor.verificationStatus === 'UNDER_REVIEW' || isTutorSelf) && (
         <Grid item xs={12} id="tour-documents">
           <section className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 p-8">
             <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
@@ -911,6 +912,7 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
               </div>
             </div>
 
+            {displayTutor.verificationStatus === 'VERIFIED' && (
             <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr', md: 'repeat(5, 1fr)' }} gap={3}>
               {Object.entries(docLabels).map(([type, label], idx) => {
                 const status = computeStatusForType(type);
@@ -982,8 +984,10 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 </p>
               </div>
             </Box>
+            )}
           </section>
         </Grid>
+        )}
       </Grid>
 
       {/* MODALS */}

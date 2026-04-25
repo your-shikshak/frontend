@@ -48,8 +48,11 @@ import {
   Briefcase,
   Save,
   Trash2,
+  Eye,
+  Maximize2,
 } from 'lucide-react';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
+import DocumentUploadModal from '../../components/common/DocumentUploadModal';
 import { getMyProfile, uploadDocument, deleteDocument, updateVerificationFeeStatus, submitVerification } from '../../services/tutorService';
 import { useAuth } from '../../hooks/useAuth';
 import type { ITutor, IDocument } from '../../types';
@@ -61,7 +64,12 @@ interface DocumentUpload {
   uploaded: boolean;
   existingDoc?: IDocument;
   isOptional?: boolean;
+  sizeError?: string;
 }
+
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 
 const VERIFICATION_FEE_AMOUNT = 500;
 
@@ -99,6 +107,7 @@ const TutorVerificationFormPage: React.FC = () => {
   });
 
   const [feeFile, setFeeFile] = useState<File | null>(null);
+  const [feeFileError, setFeeFileError] = useState<string | null>(null);
   const [feeStatus, setFeeStatus] = useState<'PENDING' | 'PAID' | 'DEDUCT'>('PENDING');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -107,6 +116,10 @@ const TutorVerificationFormPage: React.FC = () => {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<IDocument | null>(null);
+  
+  // Upload modal state
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [selectedDocType, setSelectedDocType] = useState<{ type: string; label: string } | null>(null);
 
   React.useEffect(() => {
     const fetchProfile = async () => {
@@ -116,9 +129,10 @@ const TutorVerificationFormPage: React.FC = () => {
         setTutor(tutorData);
 
         // Check if verification already submitted
-        // Note: REJECTED status should allow re-submission, so we don't set formSubmitted to true
-        if (tutorData.verificationStatus === 'UNDER_REVIEW' || 
-            tutorData.verificationStatus === 'VERIFIED') {
+        // Note: REJECTED and UNDER_REVIEW status should allow re-uploading documents 
+        // to correct errors or add missing info before final manager approval.
+        // We only lock the form completely once the tutor is VERIFIED.
+        if (tutorData.verificationStatus === 'VERIFIED') {
           setFormSubmitted(true);
         }
 
@@ -156,34 +170,62 @@ const TutorVerificationFormPage: React.FC = () => {
   }, []);
 
   const handleFileSelect = useCallback((type: string, file: File | null) => {
+    let sizeError = '';
+    if (file && file.size > MAX_FILE_SIZE_BYTES) {
+      sizeError = `File too large. Max ${MAX_FILE_SIZE_MB}MB allowed.`;
+    }
+
     setDocuments((prev) => ({
       ...prev,
       [type]: {
         ...prev[type],
         file,
+        sizeError,
       },
     }));
   }, []);
 
-  const handleUploadDocument = async (type: string) => {
+
+  const handleUploadDocument = async (type: string, fileToUpload?: File) => {
     const doc = documents[type];
-    if (!doc.file) return;
+    const file = fileToUpload || doc.file;
+    
+    if (!file) {
+      setError('Please select a file first');
+      return;
+    }
+
+    const tutorId = tutor?.id || tutor?._id;
+    if (!tutorId) {
+      console.error('Upload failed: Missing tutor ID', tutor);
+      setError('System error: Tutor profile not fully loaded. Please refresh and try again.');
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
-      const res = await uploadDocument((tutor as any).id || tutor?._id || '', type, doc.file);
-      setTutor(res.data);
+      
+      console.log(`Uploading ${type} for tutor ${tutorId}...`);
+      const res = await uploadDocument(String(tutorId), type, file);
+      
+      console.log('Upload success:', res);
+      const updatedTutor = res.data;
+      setTutor(updatedTutor);
+      
+      // Update local documents state
       setDocuments((prev) => ({
         ...prev,
         [type]: {
           ...prev[type],
           uploaded: true,
           file: null,
+          existingDoc: updatedTutor.documents?.find((d: any) => d.documentType === type),
         },
       }));
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to upload ${doc.label}`);
+      throw e; // Re-throw to let the modal catch it
     } finally {
       setLoading(false);
     }
@@ -199,15 +241,18 @@ const TutorVerificationFormPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await deleteDocument((tutor as any).id || tutor?._id || '', docIndex);
-      setTutor(res.data);
+      const res = await deleteDocument(tutor?.id || tutor?._id || '', docIndex);
+      const updatedTutor = res.data;
+      setTutor(updatedTutor);
+      
+      // Update local state to reflect deletion
       setDocuments((prev) => ({
         ...prev,
         [type]: {
           ...prev[type],
           uploaded: false,
-          existingDoc: undefined,
           file: null,
+          existingDoc: undefined,
         },
       }));
     } catch (e: any) {
@@ -226,7 +271,7 @@ const TutorVerificationFormPage: React.FC = () => {
 
       const status = feeStatus === 'DEDUCT' ? 'DEDUCT_FROM_FIRST_MONTH' : 'PENDING';
       const res = await updateVerificationFeeStatus(
-        (tutor as any).id || tutor._id,
+        tutor?.id || tutor?._id || '',
         status,
         feeFile || undefined
       );
@@ -262,8 +307,8 @@ const TutorVerificationFormPage: React.FC = () => {
       return allMandatoryUploaded();
     }
     if (currentStepId === 'payment') {
-      // Fee step - must have either file or deduct option
-      return feeStatus === 'DEDUCT' || feeFile !== null || tutor?.verificationFeeStatus === 'PAID';
+      // Fee step - must have either file (without error) or deduct option
+      return feeStatus === 'DEDUCT' || (feeFile !== null && !feeFileError) || tutor?.verificationFeeStatus === 'PAID';
     }
     if (currentStepId === 'declaration') {
       // Declaration step - all checkboxes must be checked
@@ -289,8 +334,8 @@ const TutorVerificationFormPage: React.FC = () => {
       // Final submission step
       try {
         setLoading(true);
-        if (tutor?._id) {
-          await submitVerification(String(tutor._id));
+        if (tutor?._id || tutor?.id) {
+          await submitVerification(String(tutor?._id || tutor?.id));
         }
         setFormSubmitted(true);
         setSuccess(true);
@@ -597,165 +642,231 @@ const TutorVerificationFormPage: React.FC = () => {
                 const doc = documents[docType.type];
                 const isUploaded = doc.uploaded;
                 const hasFile = !!doc.file;
-                const status = isUploaded ? 'REVIEWING' : hasFile ? 'READY' : 'NOT UPLOADED';
+                const hasError = !!doc.sizeError;
+                const status = isUploaded ? 'REVIEWING' : hasFile ? (hasError ? 'SIZE EXCEEDED' : 'READY') : 'NOT UPLOADED';
 
-                const handleCardClick = () => {
-                  if (isUploaded && doc.existingDoc) {
-                    setViewingDocument(doc.existingDoc);
-                    setViewerOpen(true);
-                  } else if (!formSubmitted) {
-                    document.getElementById(`file-${docType.type}`)?.click();
+                const handleCardClick = (e: React.MouseEvent) => {
+                  // If clicking the delete button, don't trigger card click
+                  if ((e.target as HTMLElement).closest('button')?.getAttribute('aria-label') === 'delete') {
+                    return;
+                  }
+
+                  if (isUploaded) {
+                    const documentToView = doc.existingDoc || tutor?.documents?.find((d: IDocument) => d.documentType === docType.type);
+                    if (documentToView) {
+                      setViewingDocument(documentToView);
+                      setViewerOpen(true);
+                      return;
+                    }
+                  }
+                  
+                  if (!formSubmitted) {
+                    setSelectedDocType({ type: docType.type, label: docType.label });
+                    setUploadModalOpen(true);
                   }
                 };
 
                 return (
                   <Grid item xs={6} sm={4} md={2.4} key={docType.type}>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/jpg,application/pdf"
-                      onChange={(e) => handleFileSelect(docType.type, e.target.files?.[0] || null)}
-                      style={{ display: 'none' }}
-                      id={`file-${docType.type}`}
-                      disabled={formSubmitted}
-                    />
                     <Card
                       onClick={handleCardClick}
                       sx={{
                         borderRadius: isMobile ? 4 : 5,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        p: 0,
                         cursor: formSubmitted && !isUploaded ? 'default' : 'pointer',
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        border: '2px solid',
-                        borderColor: isUploaded 
-                          ? alpha('#f59e0b', 0.15) 
-                          : hasFile 
-                          ? alpha('#3b82f6', 0.2) 
-                          : alpha('#64748b', 0.08),
-                        bgcolor: isUploaded 
-                          ? alpha('#fff', 1) 
-                          : hasFile 
-                          ? alpha('#eff6ff', 0.5) 
-                          : alpha('#f8fafc', 0.5),
-                        height: '100%',
-                        position: 'relative',
-                        overflow: 'hidden',
+                        border: `2px solid ${
+                          isUploaded
+                            ? alpha('#10b981', 0.5)
+                            : alpha('#e2e8f0', 1)
+                        }`,
+                        bgcolor: isUploaded ? alpha('#10b981', 0.02) : '#fff',
                         '&:hover': {
-                          transform: formSubmitted && !isUploaded ? 'none' : 'translateY(-4px)',
-                          boxShadow: formSubmitted && !isUploaded ? 'none' : `0 12px 24px ${alpha('#000', 0.06)}`,
-                          borderColor: isUploaded ? alpha('#f59e0b', 0.4) : alpha('#3b82f6', 0.4),
+                          transform: formSubmitted ? 'none' : 'translateY(-4px)',
+                          boxShadow: formSubmitted ? 'none' : '0 12px 20px -10px rgba(0,0,0,0.1)',
+                          borderColor: formSubmitted ? 'inherit' : isUploaded ? '#10b981' : '#3b82f6',
                         },
                       }}
                     >
-                      <CardContent sx={{ 
-                        p: isMobile ? 2 : 3, 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        textAlign: 'center',
-                        height: '100%'
-                      }}>
-                        <Box
-                          sx={{
-                            width: isMobile ? 56 : 64,
-                            height: isMobile ? 56 : 64,
-                            borderRadius: 4,
-                            bgcolor: isUploaded 
-                              ? '#f59e0b' 
-                              : hasFile 
-                              ? '#2563eb' 
-                              : alpha('#64748b', 0.15),
-                            color: isUploaded || hasFile ? '#fff' : '#64748b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            mb: 2,
-                            boxShadow: isUploaded ? `0 8px 16px ${alpha('#f59e0b', 0.3)}` : hasFile ? `0 8px 16px ${alpha('#2563eb', 0.2)}` : 'none',
-                          }}
-                        >
-                          {docType.type === 'PROFILE_PHOTO' ? <User size={isMobile ? 28 : 32} /> :
-                           docType.type === 'AADHAAR' ? <ScanLine size={isMobile ? 28 : 32} /> :
-                           docType.type === 'CERTIFICATE' ? <Award size={isMobile ? 28 : 32} /> :
-                           docType.type === 'EXPERIENCE_PROOF' ? <Briefcase size={isMobile ? 28 : 32} /> :
-                           <FileText size={isMobile ? 28 : 32} />}
-                        </Box>
-                        
-                        <Typography 
-                          variant="caption" 
-                          fontWeight={900} 
-                          sx={{ 
-                            textTransform: 'uppercase', 
-                            letterSpacing: '0.05em', 
-                            mb: 0.5,
-                            color: '#1e293b',
-                            fontSize: isMobile ? '0.65rem' : '0.7rem',
-                            display: 'block',
-                            lineHeight: 1.2
-                          }}
-                        >
-                          {docType.label}
-                          {!docType.isOptional && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
-                        </Typography>
-
-                        <Typography 
-                          variant="caption" 
-                          fontWeight={800} 
-                          sx={{ 
-                            textTransform: 'uppercase', 
-                            letterSpacing: '0.1em',
-                            fontSize: '0.6rem',
-                            color: isUploaded ? '#d97706' : hasFile ? '#2563eb' : '#64748b',
-                            opacity: isUploaded || hasFile ? 1 : 0.6
-                          }}
-                        >
-                          {status}
-                        </Typography>
-
-                        {isUploaded && !formSubmitted && (
-                          <IconButton
-                            size="small"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleDeleteDocument(docType.type);
-                            }}
+                        <CardContent sx={{ 
+                          p: isMobile ? 2 : 3, 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          alignItems: 'center', 
+                          textAlign: 'center',
+                          height: '100%'
+                        }}>
+                          <Box
                             sx={{
-                              position: 'absolute',
-                              top: 8,
-                              right: 8,
-                              bgcolor: alpha('#ef4444', 0.08),
-                              color: '#ef4444',
-                              '&:hover': { bgcolor: alpha('#ef4444', 0.15) },
-                              width: 24,
-                              height: 24,
+                              width: isMobile ? 56 : 64,
+                              height: isMobile ? 56 : 64,
+                              borderRadius: 4,
+                              bgcolor: isUploaded 
+                                ? '#f59e0b' 
+                                : hasFile 
+                                ? '#2563eb' 
+                                : alpha('#64748b', 0.15),
+                              color: isUploaded || hasFile ? '#fff' : '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              mb: 2,
+                              boxShadow: isUploaded ? `0 8px 16px ${alpha('#f59e0b', 0.3)}` : hasFile ? `0 8px 16px ${alpha('#2563eb', 0.2)}` : 'none',
                             }}
                           >
-                            <XCircle size={18} />
-                          </IconButton>
-                        )}
-
-                        {hasFile && !isUploaded && !formSubmitted && (
-                          <Button
-                            variant="contained"
-                            size="small"
-                            fullWidth
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleUploadDocument(docType.type);
-                            }}
-                            disabled={loading}
-                            sx={{
-                              mt: 2,
-                              borderRadius: 2,
-                              textTransform: 'none',
-                              fontSize: '0.7rem',
-                              fontWeight: 700,
-                              py: 0.5,
-                              boxShadow: 'none'
+                            {docType.type === 'PROFILE_PHOTO' ? <User size={isMobile ? 28 : 32} /> :
+                            docType.type === 'AADHAAR' ? <ScanLine size={isMobile ? 28 : 32} /> :
+                            docType.type === 'CERTIFICATE' ? <Award size={isMobile ? 28 : 32} /> :
+                            docType.type === 'EXPERIENCE_PROOF' ? <Briefcase size={isMobile ? 28 : 32} /> :
+                            <FileText size={isMobile ? 28 : 32} />}
+                          </Box>
+                          
+                          <Typography 
+                            variant="caption" 
+                            fontWeight={900} 
+                            sx={{ 
+                              textTransform: 'uppercase', 
+                              letterSpacing: '0.05em', 
+                              mb: 0.5,
+                              color: '#1e293b',
+                              fontSize: isMobile ? '0.65rem' : '0.7rem',
+                              display: 'block',
+                              lineHeight: 1.2
                             }}
                           >
-                            {loading ? <CircularProgress size={14} color="inherit" /> : 'Upload'}
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
+                            {docType.label}
+                            {!docType.isOptional && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
+                          </Typography>
+
+                          <Typography 
+                            variant="caption" 
+                            fontWeight={800} 
+                            sx={{ 
+                              textTransform: 'uppercase', 
+                              letterSpacing: '0.1em',
+                              fontSize: '0.6rem',
+                              color: isUploaded ? '#d97706' : hasError ? '#ef4444' : hasFile ? '#2563eb' : '#64748b',
+                              opacity: isUploaded || hasFile ? 1 : 0.6,
+                              mb: 0.5
+                            }}
+                          >
+                            {status}
+                          </Typography>
+
+                          {!isUploaded && !hasFile && (
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                fontSize: '0.55rem', 
+                                color: '#64748b', 
+                                fontWeight: 700,
+                                mt: 0.5
+                              }}
+                            >
+                              MAX {MAX_FILE_SIZE_MB}MB
+                            </Typography>
+                          )}
+
+                          {hasError && (
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                fontSize: '0.55rem', 
+                                color: '#ef4444', 
+                                fontWeight: 700,
+                                lineHeight: 1
+                              }}
+                            >
+                              {doc.sizeError}
+                            </Typography>
+                          )}
+
+                          {isUploaded && !formSubmitted && (
+                            <IconButton
+                              size="small"
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleDeleteDocument(docType.type);
+                              }}
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                bgcolor: alpha('#ef4444', 0.08),
+                                color: '#ef4444',
+                                '&:hover': { bgcolor: alpha('#ef4444', 0.15) },
+                                width: 24,
+                                height: 24,
+                              }}
+                            >
+                              <XCircle size={18} />
+                            </IconButton>
+                          )}
+
+                          {isUploaded && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              fullWidth
+                              startIcon={<Eye size={14} />}
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleCardClick(e);
+                              }}
+                              sx={{
+                                mt: 2,
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                py: 0.5,
+                                color: '#3b82f6',
+                                borderColor: alpha('#3b82f6', 0.3),
+                                '&:hover': {
+                                  bgcolor: alpha('#3b82f6', 0.05),
+                                  borderColor: '#3b82f6',
+                                }
+                              }}
+                            >
+                              View Document
+                            </Button>
+                          )}
+
+                          {hasFile && !isUploaded && !formSubmitted && (
+                            <Button
+                              variant="contained"
+                              size="small"
+                              fullWidth
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleUploadDocument(docType.type);
+                              }}
+                              disabled={loading || hasError}
+                              sx={{
+                                mt: 2,
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                py: 0.5,
+                                boxShadow: 'none',
+                                bgcolor: hasError ? alpha('#ef4444', 0.1) : undefined,
+                                color: hasError ? '#ef4444' : undefined,
+                                '&:hover': {
+                                  bgcolor: hasError ? alpha('#ef4444', 0.2) : undefined,
+                                }
+                              }}
+                            >
+                              {loading ? <CircularProgress size={14} color="inherit" /> : hasError ? 'Replace File' : 'Upload'}
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
                   </Grid>
                 );
               })}
@@ -1036,15 +1147,27 @@ const TutorVerificationFormPage: React.FC = () => {
                                 alt="Payment QR"
                                 style={{ width: 120, height: 120 }}
                               />
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                                Click to enlarge
-                              </Typography>
+                              <Button
+                                size="small"
+                                startIcon={<Maximize2 size={12} />}
+                                sx={{ mt: 1, textTransform: 'none', fontSize: '0.65rem', color: '#64748b' }}
+                              >
+                                Enlarge QR Code
+                              </Button>
                             </Box>
 
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(e) => setFeeFile(e.target.files?.[0] || null)}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+                                setFeeFile(file);
+                                if (file && file.size > MAX_FILE_SIZE_BYTES) {
+                                  setFeeFileError(`File too large. Max ${MAX_FILE_SIZE_MB}MB allowed.`);
+                                } else {
+                                  setFeeFileError(null);
+                                }
+                              }}
                               style={{ display: 'none' }}
                               id="fee-file"
                               disabled={formSubmitted}
@@ -1066,15 +1189,37 @@ const TutorVerificationFormPage: React.FC = () => {
                               </Button>
                             </label>
 
-                            {feeFile && (
-                              <Typography
-                                variant="caption"
-                                color="success.main"
-                                sx={{ mt: 1, display: 'block' }}
+                            {!feeFile && (
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  display: 'block', 
+                                  textAlign: 'center', 
+                                  mt: 1, 
+                                  color: 'text.secondary',
+                                  fontSize: '0.65rem',
+                                  fontWeight: 600
+                                }}
                               >
-                                <CheckCircle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                                {feeFile.name}
+                                MAX {MAX_FILE_SIZE_MB}MB
                               </Typography>
+                            )}
+
+                            {feeFile && (
+                              <Box sx={{ mt: 1, textAlign: 'center' }}>
+                                <Typography
+                                  variant="caption"
+                                  color={feeFileError ? "error.main" : "success.main"}
+                                  sx={{ display: 'block', fontWeight: 600 }}
+                                >
+                                  {feeFileError ? (
+                                    <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                  ) : (
+                                    <CheckCircle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                  )}
+                                  {feeFileError || feeFile.name}
+                                </Typography>
+                              </Box>
                             )}
                           </>
                         )}
@@ -1653,6 +1798,18 @@ const TutorVerificationFormPage: React.FC = () => {
         onClose={() => setViewerOpen(false)}
         document={viewingDocument}
       />
+      {selectedDocType && (
+        <DocumentUploadModal
+          open={uploadModalOpen}
+          onClose={() => {
+            setUploadModalOpen(false);
+            setSelectedDocType(null);
+          }}
+          docType={selectedDocType}
+          onUpload={(file) => handleUploadDocument(selectedDocType.type, file)}
+          loading={loading}
+        />
+      )}
     </Container>
   );
 };
