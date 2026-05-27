@@ -186,10 +186,14 @@ const TaskCard: React.FC<TaskCardProps> = (props) => {
                   <SchoolIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.3 }} />
                   <Box>
                     <Typography variant="body2" fontWeight={600}>
-                      {(props.task as IAttendance).finalClass.studentName}
+                      {(props.task as IAttendance).finalClass?.studentName || 'Student'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      {Array.isArray((props.task as IAttendance).finalClass.subject) ? (props.task as IAttendance).finalClass.subject.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || 'N/A').join(', ') : (typeof (props.task as IAttendance).finalClass.subject === 'object' && (props.task as IAttendance).finalClass.subject !== null ? ((props.task as IAttendance).finalClass.subject as any).label || ((props.task as IAttendance).finalClass.subject as any).name || 'N/A' : String((props.task as IAttendance).finalClass.subject || ''))}
+                      {Array.isArray((props.task as IAttendance).finalClass?.subject)
+                        ? (props.task as IAttendance).finalClass?.subject.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || 'N/A').join(', ')
+                        : (typeof (props.task as IAttendance).finalClass?.subject === 'object' && (props.task as IAttendance).finalClass?.subject !== null
+                          ? ((props.task as IAttendance).finalClass?.subject as any).label || ((props.task as IAttendance).finalClass?.subject as any).name || 'N/A'
+                          : String((props.task as IAttendance).finalClass?.subject || ''))}
                     </Typography>
                   </Box>
                 </Box>
@@ -199,7 +203,7 @@ const TaskCard: React.FC<TaskCardProps> = (props) => {
                 </Box>
                 <Box display="flex" alignItems="center" gap={1.5}>
                   <PersonIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                  <Typography variant="body2" color="text.secondary">{(props.task as IAttendance).tutor.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">{(props.task as IAttendance).tutor?.name || 'Tutor'}</Typography>
                 </Box>
                 {(props.task as IAttendance).notes && (
                   <Box sx={{ bgcolor: alpha(theme.palette.action.hover, 0.5), p: 1.5, borderRadius: '12px', mt: 1 }}>
@@ -217,10 +221,14 @@ const TaskCard: React.FC<TaskCardProps> = (props) => {
                   <SchoolIcon sx={{ color: 'text.secondary', fontSize: 18, mt: 0.3 }} />
                   <Box>
                     <Typography variant="body2" fontWeight={600}>
-                      {(props.task as IPaymentReminder).finalClass.studentName}
+                      {(props.task as IPaymentReminder).finalClass?.studentName || 'Student'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      {Array.isArray((props.task as IPaymentReminder).finalClass.subject) ? (props.task as IPaymentReminder).finalClass.subject.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || 'N/A').join(', ') : (typeof (props.task as IPaymentReminder).finalClass.subject === 'object' && (props.task as IPaymentReminder).finalClass.subject !== null ? ((props.task as IPaymentReminder).finalClass.subject as any).label || ((props.task as IPaymentReminder).finalClass.subject as any).name || 'N/A' : String((props.task as IPaymentReminder).finalClass.subject || ''))}
+                      {Array.isArray((props.task as IPaymentReminder).finalClass?.subject)
+                        ? (props.task as IPaymentReminder).finalClass?.subject.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || 'N/A').join(', ')
+                        : (typeof (props.task as IPaymentReminder).finalClass?.subject === 'object' && (props.task as IPaymentReminder).finalClass?.subject !== null
+                          ? ((props.task as IPaymentReminder).finalClass?.subject as any).label || ((props.task as IPaymentReminder).finalClass?.subject as any).name || 'N/A'
+                          : String((props.task as IPaymentReminder).finalClass?.subject || ''))}
                     </Typography>
                   </Box>
                 </Box>
