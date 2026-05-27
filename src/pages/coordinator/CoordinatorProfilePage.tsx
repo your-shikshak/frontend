@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Box, Typography, Grid, Card, CardContent, Avatar, Divider, Chip, Tabs, Tab, Button, TextField, MenuItem, List, ListItem, ListItemText, IconButton, Modal, Paper, Stack } from '@mui/material';
+import { Container, Box, Typography, Grid, Card, CardContent, Avatar, Divider, Chip, Tabs, Tab, Button, TextField, MenuItem, List, ListItem, ListItemText, IconButton, Paper, Stack } from '@mui/material';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import ChangePasswordOtpModal from '../../components/common/ChangePasswordOtpModal';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -23,6 +23,7 @@ import ErrorAlert from '../../components/common/ErrorAlert';
 import SnackbarNotification from '../../components/common/SnackbarNotification';
 import { subDays, format } from 'date-fns';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
+import ProfileCompletionModal from '../../components/common/ProfileCompletionModal';
 
 const CoordinatorProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -51,14 +52,7 @@ const CoordinatorProfilePage: React.FC = () => {
 
   // Profile Completion Modal State
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
-  const [completeModalData, setCompleteModalData] = useState<Partial<ICoordinator>>({
-    bio: '',
-    permanentAddress: '',
-    residentialAddress: '',
-    languagesKnown: [],
-    skills: []
-  });
-  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+  const [hasShownCompleteModal, setHasShownCompleteModal] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -87,15 +81,9 @@ const CoordinatorProfilePage: React.FC = () => {
             // Check for incomplete profile to show modal (only on own profile)
             if (!id) {
               const isInfoIncomplete = !profile.bio || !profile.permanentAddress || !profile.residentialAddress || !profile.languagesKnown?.length;
-              if (isInfoIncomplete) {
-                setCompleteModalData({
-                  bio: profile.bio || '',
-                  permanentAddress: profile.permanentAddress || '',
-                  residentialAddress: profile.residentialAddress || '',
-                  languagesKnown: profile.languagesKnown || [],
-                  skills: profile.skills || []
-                });
+              if (isInfoIncomplete && !hasShownCompleteModal) {
                 setCompleteModalOpen(true);
+                setHasShownCompleteModal(true);
               }
             }
 
@@ -175,32 +163,11 @@ const CoordinatorProfilePage: React.FC = () => {
     setViewingDocument(null);
   };
 
-  const handleCompleteProfileSubmit = async () => {
-    if (!coordinatorProfile) return;
-    
-    // Basic validation
-    if (!completeModalData.bio || completeModalData.bio.length < 20) {
-      setSnackbar({ open: true, message: 'Bio must be at least 20 characters long', severity: 'error' });
-      return;
-    }
-    if (!completeModalData.residentialAddress) {
-      setSnackbar({ open: true, message: 'Residential address is required', severity: 'error' });
-      return;
-    }
-
-    try {
-      setIsSubmittingProfile(true);
-      const coordinatorId = (coordinatorProfile as any).id || (coordinatorProfile as any)._id;
-      const resp = await coordinatorService.updateCoordinator(String(coordinatorId), completeModalData as any);
-      setCoordinatorProfile(resp.data);
+  useEffect(() => {
+    if (user?.isProfileComplete) {
       setCompleteModalOpen(false);
-      setSnackbar({ open: true, message: 'Profile completed successfully!', severity: 'success' });
-    } catch (e: any) {
-      setSnackbar({ open: true, message: e?.response?.data?.message || 'Failed to update profile', severity: 'error' });
-    } finally {
-      setIsSubmittingProfile(false);
     }
-  };
+  }, [user?.isProfileComplete]);
 
   return (
     <Container maxWidth="lg" sx={{ p: 3 }}>
@@ -464,98 +431,7 @@ const CoordinatorProfilePage: React.FC = () => {
 
       <SnackbarNotification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} />
 
-      {/* Profile Completion Modal */}
-      <Modal
-        open={completeModalOpen}
-        onClose={() => {}} // Prevent closing by clicking outside
-        aria-labelledby="complete-profile-modal"
-      >
-        <Paper
-          sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: { xs: '90%', sm: 500 },
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            p: 4,
-            outline: 'none',
-            borderRadius: 2
-          }}
-        >
-          <Typography id="complete-profile-modal" variant="h5" mb={2} fontWeight={700}>
-            Complete Your Profile
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mb={3}>
-            Please provide your professional details to complete your coordinator profile.
-          </Typography>
-
-          <Stack spacing={3}>
-            <TextField
-              label="Professional Bio"
-              multiline
-              rows={4}
-              placeholder="Tell us about your coordination experience and skills (min 20 chars)..."
-              value={completeModalData.bio}
-              onChange={(e) => setCompleteModalData({ ...completeModalData, bio: e.target.value })}
-              fullWidth
-              required
-            />
-
-            <TextField
-              label="Residential Address"
-              multiline
-              rows={2}
-              value={completeModalData.residentialAddress}
-              onChange={(e) => setCompleteModalData({ ...completeModalData, residentialAddress: e.target.value })}
-              fullWidth
-              required
-            />
-
-            <TextField
-              label="Permanent Address"
-              multiline
-              rows={2}
-              value={completeModalData.permanentAddress}
-              onChange={(e) => setCompleteModalData({ ...completeModalData, permanentAddress: e.target.value })}
-              fullWidth
-            />
-
-            <TextField
-              label="Languages Known (comma separated)"
-              placeholder="English, Hindi, etc."
-              value={completeModalData.languagesKnown?.join(', ')}
-              onChange={(e) => setCompleteModalData({ 
-                ...completeModalData, 
-                languagesKnown: e.target.value.split(',').map(s => s.trim()).filter(Boolean) 
-              })}
-              fullWidth
-            />
-
-            <TextField
-              label="Skills / Specializations (comma separated)"
-              placeholder="Team Management, Scheduling, etc."
-              value={completeModalData.skills?.join(', ')}
-              onChange={(e) => setCompleteModalData({ 
-                ...completeModalData, 
-                skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean) 
-              })}
-              fullWidth
-            />
-
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleCompleteProfileSubmit}
-              disabled={isSubmittingProfile}
-              sx={{ py: 1.5, fontWeight: 700 }}
-            >
-              {isSubmittingProfile ? 'Saving...' : 'Complete Profile'}
-            </Button>
-          </Stack>
-        </Paper>
-      </Modal>
+      <ProfileCompletionModal open={completeModalOpen} />
     </Container>
   );
 };
