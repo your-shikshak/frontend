@@ -63,8 +63,7 @@ const formatSubjectDisplay = (subject: any) => {
 };
 
 const TutorProfilePage: React.FC = () => {
-  const params = useParams<{ id?: string; _id?: string }>();
-  const routeId = params.id || params._id || undefined;
+  const { id } = useParams<{ id: string }>();
   const [tutorProfile, setTutorProfile] = useState<ITutor | null>(null);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
@@ -128,7 +127,7 @@ const TutorProfilePage: React.FC = () => {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const resp = routeId ? await getTutorById(routeId) : await getMyProfile();
+        const resp = id ? await getTutorById(id) : await getMyProfile();
         const data: any = (resp as any)?.data ?? resp;
         const tutor = (data as ITutor) || null;
         setTutorProfile(tutor);
@@ -137,7 +136,7 @@ const TutorProfilePage: React.FC = () => {
         }
 
         // Fetch detailed data for Admin view
-        if (routeId && tutor && tutor.user) {
+        if (id && tutor && tutor.user) {
           const userId = tutor.user.id || (tutor.user as any)._id;
           try {
             const [classesRes, paymentsRes, attendanceRes, statsRes] = await Promise.all([
@@ -176,7 +175,7 @@ const TutorProfilePage: React.FC = () => {
     };
 
     loadProfile();
-  }, [routeId]);
+  }, [id]);
 
 
 
@@ -384,7 +383,7 @@ const TutorProfilePage: React.FC = () => {
                     WebkitTextFillColor: 'transparent',
                   }}
                 >
-                  {routeId ? 'Tutor Profile' : 'My Profile'}
+                  {id ? 'Tutor Profile' : 'My Profile'}
                 </Typography>
                 {tutorProfile?.teacherId && (
                   <Button
@@ -415,7 +414,7 @@ const TutorProfilePage: React.FC = () => {
                     Public Profile
                   </Button>
                 )}
-                {routeId && (
+                {id && (
                   <Chip
                     label="Admin View"
                     size="small"
@@ -441,14 +440,14 @@ const TutorProfilePage: React.FC = () => {
                   fontWeight: 500,
                 }}
               >
-                  {routeId
-                    ? `Detailed overview and metrics for ${tutorProfile?.user?.name || 'Tutor'}`
-                    : 'Manage your professional presence and track your performance.'}
+                {id
+                  ? `Detailed overview and metrics for ${tutorProfile?.user?.name || 'Tutor'}`
+                  : 'Manage your professional presence and track your performance.'}
               </Typography>
             </Box>
 
             <Box display="flex" gap={1.5} flexWrap="wrap">
-              {!routeId && (
+              {!id && (
                 <Button
                   variant="outlined"
                   size="small"
@@ -505,7 +504,7 @@ const TutorProfilePage: React.FC = () => {
                 </Button>
               )}
               {(() => {
-                if (!tutorProfile || routeId) return null;
+                if (!tutorProfile || id) return null;
                 const hasSubjects = Array.isArray(tutorProfile.subjects) && tutorProfile.subjects.length > 0;
                 const hasQualifications = Array.isArray(tutorProfile.qualifications) && tutorProfile.qualifications.length > 0;
                 const hasLocations = Array.isArray(tutorProfile.preferredLocations) && tutorProfile.preferredLocations.length > 0;
@@ -558,13 +557,13 @@ const TutorProfilePage: React.FC = () => {
       {/* ─── Tier Progress + Profile Card ────────────── */}
       <Box sx={{ mb: { xs: 2.5, sm: 4 } }}>
         {tutorProfile && <TutorTierProgressCard tutor={tutorProfile} />}
-        <MUIProfileCard tutorId={routeId} />
+        <MUIProfileCard tutorId={id} />
       </Box>
 
       {/* ═══════════════════════════════════════════════ */}
       {/* ─── Admin-Only Sections ──────────────────────── */}
       {/* ═══════════════════════════════════════════════ */}
-      {routeId && (
+      {id && (
         <>
           {/* Yourshikshak  Metrics */}
           <Box sx={{ mb: { xs: 3, sm: 5 } }}>

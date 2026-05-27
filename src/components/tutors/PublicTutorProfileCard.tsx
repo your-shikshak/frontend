@@ -31,9 +31,6 @@ import {
   Info
 } from 'lucide-react';
 import { ITutor } from '../../types';
-import { resolveTierLabel, tierToHex, preferTier } from '../../utils/tier';
-import { getTutorStats, getTutorById } from '../../services/tutorService';
-import { useEffect } from 'react';
 
 interface PublicTutorProfileCardProps {
   tutor: ITutor;
@@ -93,72 +90,19 @@ const PublicTutorProfileCard: React.FC<PublicTutorProfileCardProps> = ({ tutor }
   const profileImageUrl = useMemo(() => {
     const rawUrl = (profilePhotoDoc as any)?.documentUrl;
     const fullUrl = getFullUrl(rawUrl);
-    
+    console.log('[PublicTutorProfileCard] Profile Photo Doc:', profilePhotoDoc);
+    console.log('[PublicTutorProfileCard] Raw URL:', rawUrl);
+    console.log('[PublicTutorProfileCard] Resolved Full URL:', fullUrl);
     return fullUrl;
   }, [profilePhotoDoc]);
-  const [fetchedHours, setFetchedHours] = React.useState<number | undefined>(undefined);
-  const [fullTutor, setFullTutor] = React.useState<any | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    const tryFetch = async () => {
-      if ((tutor.experienceHours || 0) > 0) return;
-      const teacherId = (tutor as any)._id || (tutor as any).id || (tutor as any).teacherId || (tutor as any).user?.id;
-      if (!teacherId) return;
-      try {
-        const resp = await getTutorStats(teacherId);
-        const stats = (resp as any)?.data || {};
-        // try common fields
-        const hours = stats.totalClassHours || stats.totalHours || stats.experienceHours || 0;
-        if (mounted) setFetchedHours(hours || undefined);
-        console.log('[PublicTutorProfileCard] fetched tutor stats', { teacherId, stats, hours });
-
-        // If stats didn't include hours, try fetching the full tutor record (same API MUIProfileCard uses)
-        if ((!hours || hours === 0) && (tutor as any)._id) {
-          try {
-            const full = await getTutorById((tutor as any)._id);
-            if (mounted) setFullTutor(full.data || null);
-          } catch (err: any) {
-            // ignore
-          }
-        }
-      } catch (e: any) {
-        // ignore
-      }
-    };
-    tryFetch();
-    return () => { mounted = false; };
-  }, [tutor]);
-
-  // Determine effective hours using multiple fallbacks:
-  // 1. explicit `experienceHours` from public profile
-  // 2. full tutor record from internal API (getTutorById)
-  // 3. fetched stats (if endpoint provides hours)
-  // 4. derive from `yearsOfExperience` (approximate: 120 hours/year) from either source
-  const years = (fullTutor?.yearsOfExperience ?? (tutor as any).yearsOfExperience) as number | undefined;
-  const derivedFromYears = years ? Number(years) * 120 : undefined;
-
-  const effectiveHours = (tutor.experienceHours && tutor.experienceHours > 0)
-    ? tutor.experienceHours
-    : (fullTutor?.experienceHours && fullTutor.experienceHours > 0)
-      ? fullTutor.experienceHours
-      : (fetchedHours && fetchedHours > 0)
-        ? fetchedHours
-        : (derivedFromYears && derivedFromYears > 0)
-          ? derivedFromYears
-          : 0;
-
-  React.useEffect(() => {
-    // effective hours computed; no-op effect for future side-effects
-  }, [tutor.experienceHours, fullTutor?.experienceHours, fetchedHours, years, derivedFromYears, effectiveHours]);
-  const finalTier = preferTier(tutor.tier, effectiveHours);
   const getTierColor = (tier: string = '') => {
-    return tierToHex(tier || finalTier, theme.palette.primary.main);
+    const t = tier.toUpperCase();
+    if (t.includes('GOLD')) return '#f59e0b';
+    if (t.includes('SILVER')) return '#94a3b8';
+    if (t.includes('BRONZE')) return '#b45309';
+    return theme.palette.primary.main;
   };
-
-  React.useEffect(() => {
-    // debug removed
-  }, [tutor.tier, tutor.experienceHours, fetchedHours, effectiveHours, finalTier]);
 
   const groupedSubjects = useMemo(() => {
     if (!tutor.subjects) return [];
@@ -275,14 +219,14 @@ const PublicTutorProfileCard: React.FC<PublicTutorProfileCardProps> = ({ tutor }
               </Box>
 
               <Chip
-                label={`Tier: ${finalTier}`}
+                label={`Tier: ${tutor.tier || 'Elite'}`}
                 size="small"
                 sx={{
                   fontWeight: 900,
                   bgcolor: 'white',
-                  color: getTierColor(finalTier),
-                    border: '1px solid',
-                    borderColor: alpha(getTierColor(finalTier), 0.2),
+                  color: getTierColor(tutor.tier),
+                  border: '1px solid',
+                  borderColor: alpha(getTierColor(tutor.tier), 0.2),
                   textTransform: 'uppercase',
                   letterSpacing: '0.1em',
                   px: 1.5,
