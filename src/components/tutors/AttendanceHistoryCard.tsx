@@ -43,6 +43,21 @@ const formatDate = (date?: Date | string) => {
   return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
+const formatDateTime = (date?: Date | string) => {
+  if (!date) return '-';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+
 const getStatusColor = (
   status?: string
 ): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
@@ -423,16 +438,16 @@ const AttendanceHistoryCard: React.FC = () => {
             const topicCovered = (a as any).topicCovered as string | undefined;
             const notes = a.notes;
             const submittedByName = a.submittedBy?.name || (a.submittedBy as any)?.user?.name;
-            const submittedAt = a.submittedAt ? formatDate(a.submittedAt as any) : '';
+            const submittedAt = a.submittedAt ? formatDateTime(a.submittedAt as any) : '';
             const coordinatorApprovedBy =
               a.coordinatorApprovedBy?.name || (a.coordinatorApprovedBy as any)?.user?.name;
             const coordinatorApprovedAt = a.coordinatorApprovedAt
-              ? formatDate(a.coordinatorApprovedAt as any)
+              ? formatDateTime(a.coordinatorApprovedAt as any)
               : '';
             const parentApprovedBy = a.parentApprovedBy?.name || (a.parentApprovedBy as any)?.user?.name;
-            const parentApprovedAt = a.parentApprovedAt ? formatDate(a.parentApprovedAt as any) : '';
+            const parentApprovedAt = a.parentApprovedAt ? formatDateTime(a.parentApprovedAt as any) : '';
             const rejectedBy = a.rejectedBy?.name || (a.rejectedBy as any)?.user?.name;
-            const rejectedAt = a.rejectedAt ? formatDate(a.rejectedAt as any) : '';
+            const rejectedAt = a.rejectedAt ? formatDateTime(a.rejectedAt as any) : '';
             const rejectionReason = a.rejectionReason;
             const studentAttendanceStatus = (a as any).studentAttendanceStatus as string | undefined;
 

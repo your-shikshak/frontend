@@ -397,7 +397,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
                     error={errors.subjects}
                     disabled={isFieldReadOnly('subjects')}
                   />
-                  
+
                   {isFieldReadOnly('subjects') && <FormHelperText sx={{ mt: 1 }}>Subject selection is locked for verified tutors.</FormHelperText>}
                 </Box>
               </Grid>
