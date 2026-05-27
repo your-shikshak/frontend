@@ -6,7 +6,6 @@ import {
   Typography,
   Button,
   Paper,
-  Grid,
   Stepper,
   Step,
   StepLabel,
@@ -19,19 +18,17 @@ import {
   CircularProgress,
   Dialog,
   Checkbox,
-  FormControlLabel,
-  FormGroup,
   useMediaQuery,
-  MobileStepper,
   IconButton,
+  Collapse,
+  LinearProgress,
+  Stack,
 } from '@mui/material';
 import {
   ShieldCheck,
   FileText,
   Upload,
   CheckCircle,
-  ArrowRight,
-  ArrowLeft,
   User,
   CreditCard,
   Info,
@@ -40,16 +37,14 @@ import {
   Wallet,
   ScanLine,
   Clock,
-  ThumbsUp,
   XCircle,
   ChevronRight,
   ChevronLeft,
   Award,
   Briefcase,
-  Save,
-  Trash2,
   Eye,
   Maximize2,
+  ChevronDown,
 } from 'lucide-react';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
 import DocumentUploadModal from '../../components/common/DocumentUploadModal';
@@ -57,6 +52,7 @@ import { getMyProfile, uploadDocument, deleteDocument, updateVerificationFeeStat
 import { useAuth } from '../../hooks/useAuth';
 import type { ITutor, IDocument } from '../../types';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface DocumentUpload {
   type: string;
   label: string;
@@ -69,22 +65,226 @@ interface DocumentUpload {
 
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-
 const VERIFICATION_FEE_AMOUNT = 500;
 
-const docTypes: { type: string; label: string; isOptional?: boolean }[] = [
-  { type: 'PROFILE_PHOTO', label: 'Profile Photo' },
-  { type: 'AADHAAR', label: 'Aadhar Card' },
-  { type: 'CERTIFICATE', label: 'Qualification Certificate' },
-  { type: 'EXPERIENCE_PROOF', label: 'Experience Proof', isOptional: true },
+const docTypes: { type: string; label: string; icon: React.ReactNode; isOptional?: boolean }[] = [
+  { type: 'PROFILE_PHOTO', label: 'Profile Photo', icon: <User size={26} /> },
+  { type: 'AADHAAR', label: 'Aadhaar Card', icon: <ScanLine size={26} /> },
+  { type: 'CERTIFICATE', label: 'Certificate', icon: <Award size={26} /> },
+  { type: 'EXPERIENCE_PROOF', label: 'Exp. Proof', icon: <Briefcase size={26} />, isOptional: true },
 ];
 
+const steps = [
+  { id: 'docs', label: 'Documents', shortLabel: 'Docs' },
+  { id: 'payment', label: 'Payment', shortLabel: 'Pay' },
+  { id: 'declaration', label: 'Declaration', shortLabel: 'Agree' },
+  { id: 'review', label: 'Review', shortLabel: 'Review' },
+  { id: 'submit', label: 'Submit', shortLabel: 'Submit' },
+];
+
+// ─── Step Progress Bar (Mobile) ───────────────────────────────────────────────
+function MobileStepBar({ activeStep, total }: { activeStep: number; total: number }) {
+  const progress = ((activeStep) / (total - 1)) * 100;
+  const step = steps[activeStep];
+  return (
+    <Box sx={{ mb: 2.5 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.75}>
+        <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.7rem' }}>
+          Step {activeStep + 1} of {total}
+        </Typography>
+        <Typography variant="caption" fontWeight={700} color="text.primary" sx={{ fontSize: '0.8rem' }}>
+          {step.label}
+        </Typography>
+      </Stack>
+      <LinearProgress
+        variant="determinate"
+        value={progress}
+        sx={{
+          height: 6, borderRadius: 4,
+          bgcolor: alpha('#2D68C4', 0.12),
+          '& .MuiLinearProgress-bar': { borderRadius: 4, bgcolor: 'primary.main' },
+        }}
+      />
+      {/* Step dots */}
+      <Stack direction="row" justifyContent="space-between" mt={0.75} px={0.25}>
+        {steps.map((s, i) => (
+          <Box key={s.id} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+            <Box sx={{
+              width: i <= activeStep ? 8 : 6,
+              height: i <= activeStep ? 8 : 6,
+              borderRadius: '50%',
+              bgcolor: i < activeStep ? '#10B981' : i === activeStep ? 'primary.main' : alpha('#94A3B8', 0.4),
+              transition: 'all 0.25s ease',
+            }} />
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
+// ─── Doc Card ────────────────────────────────────────────────────────────────
+interface DocCardProps {
+  docType: typeof docTypes[0];
+  doc: DocumentUpload;
+  formSubmitted: boolean;
+  loading: boolean;
+  onCardClick: (e: React.MouseEvent) => void;
+  onDelete: () => void;
+  onUpload: () => void;
+  isMobile: boolean;
+}
+
+function DocCard({ docType, doc, formSubmitted, loading, onCardClick, onDelete, onUpload, isMobile }: DocCardProps) {
+  const isUploaded = doc.uploaded;
+  const hasFile = !!doc.file;
+  const hasError = !!doc.sizeError;
+
+  const stateColor = isUploaded ? '#10B981' : hasError ? '#EF4444' : hasFile ? '#2D68C4' : '#94A3B8';
+  const iconBg = isUploaded ? '#10B981' : hasFile ? '#2D68C4' : alpha('#94A3B8', 0.15);
+  const iconColor = isUploaded || hasFile ? '#fff' : '#64748B';
+
+  return (
+    <Card
+      onClick={onCardClick}
+      sx={{
+        borderRadius: 3,
+        border: '2px solid',
+        borderColor: isUploaded ? alpha('#10B981', 0.4) : alpha('#E2E8F0', 1),
+        bgcolor: isUploaded ? alpha('#10B981', 0.03) : '#fff',
+        cursor: formSubmitted && !isUploaded ? 'default' : 'pointer',
+        transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+        position: 'relative',
+        '&:hover': {
+          transform: formSubmitted ? 'none' : 'translateY(-3px)',
+          boxShadow: formSubmitted ? 'none' : `0 8px 24px ${alpha(stateColor, 0.18)}`,
+          borderColor: formSubmitted ? undefined : stateColor,
+        },
+      }}
+    >
+      {/* Delete button */}
+      {isUploaded && !formSubmitted && (
+        <IconButton
+          size="small"
+          aria-label="delete"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          sx={{
+            position: 'absolute', top: 6, right: 6, zIndex: 2,
+            width: 22, height: 22,
+            bgcolor: alpha('#EF4444', 0.1), color: '#EF4444',
+            '&:hover': { bgcolor: alpha('#EF4444', 0.2) },
+          }}
+        >
+          <XCircle size={14} />
+        </IconButton>
+      )}
+
+      <CardContent sx={{ p: isMobile ? 1.75 : 2.5, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 1 }}>
+        {/* Icon */}
+        <Box sx={{
+          width: isMobile ? 52 : 60, height: isMobile ? 52 : 60,
+          borderRadius: 3, bgcolor: iconBg, color: iconColor,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: isUploaded ? `0 6px 16px ${alpha('#10B981', 0.28)}` : hasFile ? `0 6px 16px ${alpha('#2D68C4', 0.2)}` : 'none',
+          transition: 'all 0.25s ease',
+        }}>
+          {docType.icon}
+        </Box>
+
+        {/* Label */}
+        <Box>
+          <Typography fontWeight={700} sx={{ fontSize: isMobile ? '0.7rem' : '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#1E293B', lineHeight: 1.2 }}>
+            {docType.label}
+            {!docType.isOptional && <Box component="span" sx={{ color: '#EF4444', ml: 0.25 }}>*</Box>}
+          </Typography>
+          {docType.isOptional && (
+            <Typography sx={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: 600, mt: 0.25 }}>Optional</Typography>
+          )}
+        </Box>
+
+        {/* Status badge */}
+        <Box sx={{
+          px: 1, py: 0.25, borderRadius: 10,
+          bgcolor: isUploaded ? alpha('#10B981', 0.1) : hasError ? alpha('#EF4444', 0.1) : hasFile ? alpha('#2D68C4', 0.1) : alpha('#94A3B8', 0.1),
+          color: stateColor, fontSize: '0.58rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em',
+        }}>
+          {isUploaded ? '✓ Done' : hasError ? 'Too Large' : hasFile ? 'Ready' : `Max ${MAX_FILE_SIZE_MB}MB`}
+        </Box>
+
+        {/* Action buttons */}
+        {isUploaded && (
+          <Button
+            variant="outlined" size="small" fullWidth
+            startIcon={<Eye size={12} />}
+            onClick={(e) => { e.stopPropagation(); onCardClick(e); }}
+            sx={{ borderRadius: 2, fontSize: '0.65rem', fontWeight: 700, py: 0.4, textTransform: 'none', borderColor: alpha('#2D68C4', 0.3), color: '#2D68C4', '&:hover': { bgcolor: alpha('#2D68C4', 0.05) } }}
+          >
+            View
+          </Button>
+        )}
+
+        {hasFile && !isUploaded && !formSubmitted && (
+          <Button
+            variant="contained" size="small" fullWidth
+            onClick={(e) => { e.stopPropagation(); onUpload(); }}
+            disabled={loading || hasError}
+            sx={{ borderRadius: 2, fontSize: '0.65rem', fontWeight: 700, py: 0.4, textTransform: 'none', boxShadow: 'none' }}
+          >
+            {loading ? <CircularProgress size={12} color="inherit" /> : 'Upload'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Guidelines Accordion ────────────────────────────────────────────────────
+function GuidelinesAccordion() {
+  const [open, setOpen] = useState(false);
+  const tips = [
+    { icon: '📋', text: 'Upload both sides of Aadhaar in one PDF' },
+    { icon: '👤', text: 'Name must match exactly across all docs' },
+    { icon: '💳', text: 'Pay exactly ₹500 — upload clear screenshot' },
+    { icon: '🔍', text: 'Clear, well-lit, uncropped photos only' },
+    { icon: '⚠️', text: 'False info = permanent disqualification' },
+  ];
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2, borderRadius: 2.5, borderColor: alpha('#2D68C4', 0.2), bgcolor: alpha('#2D68C4', 0.02), overflow: 'hidden' }}>
+      <Box
+        onClick={() => setOpen(p => !p)}
+        sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Info size={16} color="#2D68C4" />
+          <Typography fontWeight={700} fontSize="0.8125rem" color="#1E40AF">Submission Guidelines</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Typography fontSize="0.7rem" color="#64748B" fontWeight={600}>{open ? 'Hide' : 'Show'}</Typography>
+          <Box sx={{ transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>
+            <ChevronDown size={16} color="#64748B" />
+          </Box>
+        </Box>
+      </Box>
+      <Collapse in={open}>
+        <Box sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          {tips.map((tip, i) => (
+            <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+              <Typography fontSize="0.875rem" lineHeight={1.4}>{tip.icon}</Typography>
+              <Typography fontSize="0.8rem" color="#475569" lineHeight={1.4}>{tip.text}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </Collapse>
+    </Card>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 const TutorVerificationFormPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const { user: currentUser } = useAuth();
   const [tutor, setTutor] = useState<ITutor | null>(null);
   const [activeStep, setActiveStep] = useState(0);
@@ -95,13 +295,7 @@ const TutorVerificationFormPage: React.FC = () => {
   const [documents, setDocuments] = useState<Record<string, DocumentUpload>>(() => {
     const initial: Record<string, DocumentUpload> = {};
     docTypes.forEach((doc) => {
-      initial[doc.type] = {
-        type: doc.type,
-        label: doc.label,
-        file: null,
-        uploaded: false,
-        isOptional: doc.isOptional,
-      };
+      initial[doc.type] = { type: doc.type, label: doc.label, file: null, uploaded: false, isOptional: doc.isOptional };
     });
     return initial;
   });
@@ -116,8 +310,6 @@ const TutorVerificationFormPage: React.FC = () => {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<IDocument | null>(null);
-  
-  // Upload modal state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState<{ type: string; label: string } | null>(null);
 
@@ -127,105 +319,52 @@ const TutorVerificationFormPage: React.FC = () => {
         const res = await getMyProfile();
         const tutorData = res.data;
         setTutor(tutorData);
-
-        // Check if verification already submitted
-        // Note: REJECTED and UNDER_REVIEW status should allow re-uploading documents 
-        // to correct errors or add missing info before final manager approval.
-        // We only lock the form completely once the tutor is VERIFIED.
-        if (tutorData.verificationStatus === 'VERIFIED') {
-          setFormSubmitted(true);
-        }
-
-        // Check existing documents
+        if (tutorData.verificationStatus === 'VERIFIED') setFormSubmitted(true);
         if (tutorData.documents) {
           setDocuments((prev) => {
             const updated = { ...prev };
             tutorData.documents?.forEach((doc: IDocument) => {
               if (updated[doc.documentType]) {
-                updated[doc.documentType] = {
-                  ...updated[doc.documentType],
-                  uploaded: true,
-                  existingDoc: doc,
-                };
+                updated[doc.documentType] = { ...updated[doc.documentType], uploaded: true, existingDoc: doc };
               }
             });
             return updated;
           });
         }
-
-        // Check fee status
         if (tutorData.verificationFeeStatus) {
-          if (tutorData.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') {
-            setFeeStatus('DEDUCT');
-          } else if (tutorData.verificationFeeStatus === 'PAID') {
-            setFeeStatus('PAID');
-          }
+          if (tutorData.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH') setFeeStatus('DEDUCT');
+          else if (tutorData.verificationFeeStatus === 'PAID') setFeeStatus('PAID');
         }
       } catch (e: any) {
         setError(e?.response?.data?.message || 'Failed to load profile');
       }
     };
-
     fetchProfile();
   }, []);
 
   const handleFileSelect = useCallback((type: string, file: File | null) => {
-    let sizeError = '';
-    if (file && file.size > MAX_FILE_SIZE_BYTES) {
-      sizeError = `File too large. Max ${MAX_FILE_SIZE_MB}MB allowed.`;
-    }
-
-    setDocuments((prev) => ({
-      ...prev,
-      [type]: {
-        ...prev[type],
-        file,
-        sizeError,
-      },
-    }));
+    const sizeError = file && file.size > MAX_FILE_SIZE_BYTES ? `Max ${MAX_FILE_SIZE_MB}MB allowed.` : '';
+    setDocuments((prev) => ({ ...prev, [type]: { ...prev[type], file, sizeError } }));
   }, []);
-
 
   const handleUploadDocument = async (type: string, fileToUpload?: File) => {
     const doc = documents[type];
     const file = fileToUpload || doc.file;
-    
-    if (!file) {
-      setError('Please select a file first');
-      return;
-    }
-
+    if (!file) { setError('Please select a file first'); return; }
     const tutorId = tutor?.id || tutor?._id;
-    if (!tutorId) {
-      console.error('Upload failed: Missing tutor ID', tutor);
-      setError('System error: Tutor profile not fully loaded. Please refresh and try again.');
-      return;
-    }
-
+    if (!tutorId) { setError('System error: Tutor profile not fully loaded. Please refresh.'); return; }
     try {
-      setLoading(true);
-      setError(null);
-      
-      console.log(`Uploading ${type} for tutor ${tutorId}...`);
+      setLoading(true); setError(null);
       const res = await uploadDocument(String(tutorId), type, file);
-      
-      console.log('Upload success:', res);
       const updatedTutor = res.data;
       setTutor(updatedTutor);
-      
-      // Update local documents state
       setDocuments((prev) => ({
         ...prev,
-        [type]: {
-          ...prev[type],
-          uploaded: true,
-          file: null,
-          existingDoc: updatedTutor.documents?.find((d: any) => d.documentType === type),
-        },
+        [type]: { ...prev[type], uploaded: true, file: null, existingDoc: updatedTutor.documents?.find((d: any) => d.documentType === type) },
       }));
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to upload ${doc.label}`);
-      throw e; // Re-throw to let the modal catch it
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -233,28 +372,14 @@ const TutorVerificationFormPage: React.FC = () => {
 
   const handleDeleteDocument = async (type: string) => {
     if (!tutor) return;
-    
-    // Find index of document in tutor.documents
     const docIndex = tutor.documents?.findIndex(d => d.documentType === type);
     if (docIndex === undefined || docIndex === -1) return;
-
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true); setError(null);
       const res = await deleteDocument(tutor?.id || tutor?._id || '', docIndex);
       const updatedTutor = res.data;
       setTutor(updatedTutor);
-      
-      // Update local state to reflect deletion
-      setDocuments((prev) => ({
-        ...prev,
-        [type]: {
-          ...prev[type],
-          uploaded: false,
-          file: null,
-          existingDoc: undefined,
-        },
-      }));
+      setDocuments((prev) => ({ ...prev, [type]: { ...prev[type], uploaded: false, file: null, existingDoc: undefined } }));
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to delete ${documents[type].label}`);
     } finally {
@@ -264,17 +389,10 @@ const TutorVerificationFormPage: React.FC = () => {
 
   const handleFeeSubmit = async () => {
     if (!tutor) return;
-
     try {
-      setLoading(true);
-      setError(null);
-
+      setLoading(true); setError(null);
       const status = feeStatus === 'DEDUCT' ? 'DEDUCT_FROM_FIRST_MONTH' : 'PENDING';
-      const res = await updateVerificationFeeStatus(
-        tutor?.id || tutor?._id || '',
-        status,
-        feeFile || undefined
-      );
+      const res = await updateVerificationFeeStatus(tutor?.id || tutor?._id || '', status, feeFile || undefined);
       setTutor(res.data);
     } catch (e: any) {
       setError(e?.response?.data?.message || 'Failed to update fee status');
@@ -283,74 +401,32 @@ const TutorVerificationFormPage: React.FC = () => {
     }
   };
 
-  const allMandatoryUploaded = () => {
-    return docTypes
-      .filter((d) => !d.isOptional)
-      .every((d) => documents[d.type]?.uploaded);
-  };
-
+  const allMandatoryUploaded = () => docTypes.filter(d => !d.isOptional).every(d => documents[d.type]?.uploaded);
   const isFeePaid = tutor?.verificationFeeStatus === 'PAID' || tutor?.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH';
-  
-  const steps = [
-    { id: 'docs', label: 'Upload Documents' },
-    { id: 'payment', label: 'Payment' },
-    { id: 'declaration', label: 'Declaration' },
-    { id: 'review', label: 'Review' },
-    { id: 'submit', label: 'Submit' },
-  ];
-
   const currentStepId = steps[activeStep]?.id;
 
   const canProceedToNextStep = () => {
-    if (currentStepId === 'docs') {
-      // Documents step - all mandatory must be uploaded
-      return allMandatoryUploaded();
-    }
-    if (currentStepId === 'payment') {
-      // Fee step - must have either file (without error) or deduct option
-      return feeStatus === 'DEDUCT' || (feeFile !== null && !feeFileError) || tutor?.verificationFeeStatus === 'PAID';
-    }
-    if (currentStepId === 'declaration') {
-      // Declaration step - all checkboxes must be checked
-      return agreedToTerms && confirmedAuthentic && understandConsequences;
-    }
+    if (currentStepId === 'docs') return allMandatoryUploaded();
+    if (currentStepId === 'payment') return feeStatus === 'DEDUCT' || (feeFile !== null && !feeFileError) || !!tutor?.verificationFeeStatus;
+    if (currentStepId === 'declaration') return agreedToTerms && confirmedAuthentic && understandConsequences;
     return true;
   };
 
   const handleNext = async () => {
-    if (currentStepId === 'payment') {
-      await handleFeeSubmit();
-    }
-    
+    if (currentStepId === 'payment') await handleFeeSubmit();
     let nextStep = activeStep + 1;
-    // Skip payment if paid already
-    if (nextStep === 1 && isFeePaid) {
-      nextStep = 2;
-    }
-
+    if (nextStep === 1 && isFeePaid) nextStep = 2;
     if (nextStep < steps.length) {
       setActiveStep(nextStep);
     } else {
-      // Final submission step
       try {
         setLoading(true);
-        if (tutor?._id || tutor?.id) {
-          await submitVerification(String(tutor?._id || tutor?.id));
-        }
-        setFormSubmitted(true);
-        setSuccess(true);
-        setTimeout(() => {
-          navigate('/tutor-profile');
-        }, 2000);
-      } catch (err: any) {
-        console.error('Failed to submit verification:', err);
-        // show error if needed, but for now just proceed to success state 
-        // to avoid stuck UI, since docs are already uploaded
-        setFormSubmitted(true);
-        setSuccess(true);
-        setTimeout(() => {
-          navigate('/tutor-profile');
-        }, 2000);
+        if (tutor?._id || tutor?.id) await submitVerification(String(tutor?._id || tutor?.id));
+        setFormSubmitted(true); setSuccess(true);
+        setTimeout(() => navigate('/tutor-profile'), 2000);
+      } catch {
+        setFormSubmitted(true); setSuccess(true);
+        setTimeout(() => navigate('/tutor-profile'), 2000);
       } finally {
         setLoading(false);
       }
@@ -360,1457 +436,517 @@ const TutorVerificationFormPage: React.FC = () => {
   const handleBack = () => {
     if (activeStep > 0) {
       let prevStep = activeStep - 1;
-      // Skip payment if paid
-      if (prevStep === 1 && isFeePaid) {
-        prevStep = 0;
-      }
+      if (prevStep === 1 && isFeePaid) prevStep = 0;
       setActiveStep(prevStep);
     }
   };
 
-  const stepLabels = steps.map(s => s.label);
-
+  // ─── Success Screen ──────────────────────────────────────────────────────────
   if (success) {
     return (
-      <Container maxWidth="sm" sx={{ py: 8 }}>
-        <Paper
-          elevation={0}
-          sx={{
-            p: 6,
-            borderRadius: 4,
-            textAlign: 'center',
-            bgcolor: alpha('#10b981', 0.05),
-            border: `2px solid ${alpha('#10b981', 0.2)}`,
-          }}
-        >
-          <Box
-            sx={{
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              bgcolor: '#10b981',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mx: 'auto',
-              mb: 3,
-            }}
-          >
+      <Container maxWidth="sm" sx={{ py: 8, display: 'flex', alignItems: 'center', minHeight: '60vh' }}>
+        <Paper elevation={0} sx={{ p: 5, borderRadius: 4, textAlign: 'center', bgcolor: alpha('#10b981', 0.04), border: `2px solid ${alpha('#10b981', 0.2)}`, width: '100%' }}>
+          <Box sx={{ width: 80, height: 80, borderRadius: '50%', bgcolor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 3, boxShadow: `0 12px 32px ${alpha('#10b981', 0.35)}` }}>
             <CheckCircle size={40} color="white" />
           </Box>
-          <Typography variant="h5" fontWeight={800} color="#1e293b" gutterBottom>
-            Verification Submitted!
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Your documents have been uploaded successfully. Our team will review your application shortly.
-          </Typography>
+          <Typography variant="h5" fontWeight={800} color="#1e293b" gutterBottom>Verification Submitted!</Typography>
+          <Typography variant="body2" color="text.secondary">Your documents have been uploaded. Our team will review your application shortly.</Typography>
         </Paper>
       </Container>
     );
   }
 
+  // ─── Main Layout ──────────────────────────────────────────────────────────────
   return (
-    <Container maxWidth="md" sx={{ py: isMobile ? 2 : 4, px: isMobile ? 1 : 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: isMobile ? 2 : 4 }}>
-        <Typography
-          variant={isMobile ? 'h5' : 'h4'}
-          fontWeight={800}
-          color="#1e293b"
-          gutterBottom
-          sx={{ fontFamily: "'Manrope', sans-serif" }}
-        >
-          Tutor Verification
-        </Typography>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#F8FAFC', pb: isMobile ? '148px' : 0 }}>
+      <Container maxWidth="md" sx={{ py: isMobile ? 2 : 4, px: isMobile ? 1.5 : 3 }}>
 
-        {tutor?.verificationStatus === 'REJECTED' && (
-          <Alert
-            severity="error"
-            icon={<XCircle size={24} />}
-            sx={{
-              mt: 2,
-              borderRadius: 3,
-              border: '1px solid',
-              borderColor: 'error.light',
-              '& .MuiAlert-message': { width: '100%' }
-            }}
-          >
-            <Typography variant="subtitle2" fontWeight={700}>
-              Verification Rejected
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5 }}>
-              <strong>Reason:</strong> {tutor.verificationRejectionReason || 'Please review your documents and try again.'}
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', mt: 1, opacity: 0.8 }}>
-              Please correct the issues mentioned above and re-upload the necessary documents.
-            </Typography>
-          </Alert>
-        )}
-        <Typography variant={isMobile ? 'body2' : 'body1'} color="text.secondary">
-          Complete the verification process to become a verified tutor on our platform.
-        </Typography>
-      </Box>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Mobile Stepper */}
-      {isMobile ? (
-        <MobileStepper
-          variant="dots"
-          steps={steps.length}
-          position="static"
-          activeStep={activeStep}
-          sx={{ 
-            mb: 2, 
-            bgcolor: 'transparent',
-            '& .MuiMobileStepper-dot': { width: 8, height: 8 },
-            '& .MuiMobileStepper-dotActive': { bgcolor: '#3b82f6' }
-          }}
-          nextButton={null}
-          backButton={null}
-        />
-      ) : (
-        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {steps.map((s, index) => (
-            <Step 
-              key={s.id} 
-              completed={index < activeStep || (index === 1 && isFeePaid)}
-            >
-              <StepLabel>{s.label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-      )}
-
-      {/* Current Step Label for Mobile */}
-      {isMobile && (
-        <Typography 
-          variant="subtitle1" 
-          fontWeight={700} 
-          textAlign="center" 
-          sx={{ mb: 2, color: '#3b82f6' }}
-        >
-          Step {activeStep + 1}: {steps[activeStep].label}
-        </Typography>
-      )}
-
-      {/* Step Content */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: isMobile ? 2 : 4,
-          borderRadius: isMobile ? 2 : 4,
-          border: `1px solid ${alpha('#64748b', 0.1)}`,
-          minHeight: 400,
-        }}
-      >
-        {/* Step: Documents */}
-        {currentStepId === 'docs' && (
-          <Box>
-            <Box sx={{ mb: isMobile ? 2 : 4 }}>
-              <Typography
-                variant={isMobile ? 'subtitle1' : 'h6'}
-                fontWeight={700}
-                sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
-              >
-                Step 1: Upload Required Documents
-              </Typography>
-              <Alert severity="warning" sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}>
-                <Typography variant="body2" fontWeight={600}>
-                  Important: It is mandatory to upload all required documents for verification.
-                </Typography>
-              </Alert>
-              <Alert severity="info" sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-                  Verification Submission Guidelines
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  • Upload both sides of your Aadhaar or government-issued ID combined into a single PDF file.
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  • Ensure your name, address, and age match exactly in your profile and in every uploaded document.
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  • Pay the verification fee as ₹500 only; do not pay more or less. Upload a clear screenshot of the successful payment.
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  • Verification may be rejected if any information is incorrect, inconsistent, misleading, or appears false.
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  • Select a verification fee option carefully — changes are not allowed after selection.
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  • If your verification is rejected, read the rejection notes carefully and reapply, or contact your manager for assistance.
-                </Typography>
-              </Alert>
+        {/* ── Page Header ── */}
+        <Box sx={{ mb: isMobile ? 2 : 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+            <Box sx={{ p: 1, borderRadius: 2, bgcolor: alpha('#2D68C4', 0.1), color: 'primary.main', display: 'flex' }}>
+              <ShieldCheck size={20} />
             </Box>
+            <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={800} color="#1e293b">
+              Tutor Verification
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ pl: isMobile ? 0 : 0.5 }}>
+            Complete all steps to become a verified tutor.
+          </Typography>
 
-            {/* Document Requirements Info */}
-            <Card
-              variant="outlined"
-              sx={{
-                mb: 3,
-                borderRadius: 3,
-                borderColor: alpha('#3b82f6', 0.3),
-                bgcolor: alpha('#3b82f6', 0.02),
-              }}
-            >
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Info size={18} color="#2563eb" />
-                  Required Documents
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#2563eb', mt: 1 }} />
-                      <Typography variant="body2" color="#475569">
-                        <strong>Government ID Proof (Aadhaar)</strong> - front & back sides required
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#2563eb', mt: 1 }} />
-                      <Typography variant="body2" color="#475569">
-                        <strong>Educational Certificates</strong> - Qualification proof
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#2563eb', mt: 1 }} />
-                      <Typography variant="body2" color="#475569">
-                        <strong>Profile Picture</strong> - clear passport-size image (your own)
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#10b981', mt: 1 }} />
-                      <Typography variant="body2" color="#475569">
-                        <strong>Experience Proof</strong> - if applicable (optional)
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
+          {/* Rejection Alert */}
+          {tutor?.verificationStatus === 'REJECTED' && (
+            <Alert severity="error" icon={<XCircle size={18} />} sx={{ mt: 1.5, borderRadius: 2.5, '& .MuiAlert-message': { width: '100%' } }}>
+              <Typography variant="subtitle2" fontWeight={700}>Verification Rejected</Typography>
+              <Typography variant="body2" sx={{ mt: 0.25 }}>{tutor.verificationRejectionReason || 'Please review your documents and reapply.'}</Typography>
+            </Alert>
+          )}
+        </Box>
 
-                <Box
-                  sx={{
-                    mt: 2,
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: alpha('#f8fafc', 1),
-                    border: `1px dashed ${alpha('#cbd5e1', 1)}`,
-                  }}
-                >
-                  <Typography variant="caption" fontWeight={700} color="#64748b" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                    <ThumbsUp size={14} color="#10b981" />
-                    Document Upload Tips
-                  </Typography>
-                  <Typography variant="caption" color="#64748b" component="div" sx={{ pl: 1 }}>
-                    • Upload both front and back sides of all documents (especially ID proof)<br/>
-                    • Documents should be clear, readable, and not cropped<br/>
-                    • Ensure good lighting when photographing documents
+        {/* ── Error Alert ── */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>{error}</Alert>
+        )}
+
+        {/* ── Step Indicator ── */}
+        {isMobile ? (
+          <MobileStepBar activeStep={activeStep} total={steps.length} />
+        ) : (
+          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+            {steps.map((s, index) => (
+              <Step key={s.id} completed={index < activeStep || (index === 1 && isFeePaid)}>
+                <StepLabel>{s.label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        )}
+
+        {/* ── Step Content Card ── */}
+        <Paper elevation={0} sx={{ p: isMobile ? 2 : 3.5, borderRadius: isMobile ? 2.5 : 3.5, border: '1px solid #E2E8F0', minHeight: 300, mb: isMobile ? 0 : 3 }}>
+
+          {/* ════ STEP 1: DOCUMENTS ════ */}
+          {currentStepId === 'docs' && (
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+                Upload Your Documents
+              </Typography>
+
+              {/* Mandatory warning — compact */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, p: 1.25, borderRadius: 2, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.25)}` }}>
+                <AlertCircle size={16} color="#D97706" style={{ flexShrink: 0 }} />
+                <Typography fontSize="0.8rem" fontWeight={600} color="#92400E">All starred (*) documents are mandatory.</Typography>
+              </Box>
+
+              {/* Collapsible Guidelines */}
+              <GuidelinesAccordion />
+
+              {/* Rejected docs tip */}
+              {tutor?.verificationStatus === 'REJECTED' && (
+                <Box sx={{ mb: 1.5, p: 1.25, borderRadius: 2, bgcolor: alpha('#3B82F6', 0.06), border: `1px solid ${alpha('#3B82F6', 0.18)}` }}>
+                  <Typography fontSize="0.78rem" fontWeight={600} color="#1E40AF">
+                    To replace a doc: tap the <XCircle size={12} style={{ display: 'inline', verticalAlign: 'middle', color: '#EF4444' }} /> to delete, then tap the card to upload new.
                   </Typography>
                 </Box>
-              </CardContent>
-            </Card>
+              )}
 
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              All documents marked with <span style={{ color: '#ef4444' }}>*</span> are mandatory.
-              Experience proof is optional.
-            </Typography>
-
-            {tutor?.verificationStatus === 'REJECTED' && (
-              <Alert 
-                severity="info" 
-                icon={<AlertCircle size={20} />}
-                sx={{ mb: 3, borderRadius: '12px', bgcolor: alpha('#3b82f6', 0.05), border: '1px solid', borderColor: alpha('#3b82f6', 0.1) }}
-              >
-                <Typography variant="body2" fontWeight={600} color="#1e40af">
-                  Replacing Documents:
-                </Typography>
-                <Typography variant="caption" color="#1e40af">
-                  To update a document, first click the red "X" to delete the current one, then click the card to upload the new version.
-                </Typography>
-              </Alert>
-            )}
-            <Grid container spacing={isMobile ? 2 : 3}>
-              {docTypes.map((docType) => {
-                const doc = documents[docType.type];
-                const isUploaded = doc.uploaded;
-                const hasFile = !!doc.file;
-                const hasError = !!doc.sizeError;
-                const status = isUploaded ? 'REVIEWING' : hasFile ? (hasError ? 'SIZE EXCEEDED' : 'READY') : 'NOT UPLOADED';
-
-                const handleCardClick = (e: React.MouseEvent) => {
-                  // If clicking the delete button, don't trigger card click
-                  if ((e.target as HTMLElement).closest('button')?.getAttribute('aria-label') === 'delete') {
-                    return;
-                  }
-
-                  if (isUploaded) {
-                    const documentToView = doc.existingDoc || tutor?.documents?.find((d: IDocument) => d.documentType === docType.type);
-                    if (documentToView) {
-                      setViewingDocument(documentToView);
-                      setViewerOpen(true);
-                      return;
-                    }
-                  }
-                  
-                  if (!formSubmitted) {
-                    setSelectedDocType({ type: docType.type, label: docType.label });
-                    setUploadModalOpen(true);
-                  }
-                };
-
-                return (
-                  <Grid item xs={6} sm={4} md={2.4} key={docType.type}>
-                    <Card
-                      onClick={handleCardClick}
-                      sx={{
-                        borderRadius: isMobile ? 4 : 5,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        p: 0,
-                        cursor: formSubmitted && !isUploaded ? 'default' : 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        border: `2px solid ${
-                          isUploaded
-                            ? alpha('#10b981', 0.5)
-                            : alpha('#e2e8f0', 1)
-                        }`,
-                        bgcolor: isUploaded ? alpha('#10b981', 0.02) : '#fff',
-                        '&:hover': {
-                          transform: formSubmitted ? 'none' : 'translateY(-4px)',
-                          boxShadow: formSubmitted ? 'none' : '0 12px 20px -10px rgba(0,0,0,0.1)',
-                          borderColor: formSubmitted ? 'inherit' : isUploaded ? '#10b981' : '#3b82f6',
-                        },
-                      }}
-                    >
-                        <CardContent sx={{ 
-                          p: isMobile ? 2 : 3, 
-                          display: 'flex', 
-                          flexDirection: 'column', 
-                          alignItems: 'center', 
-                          textAlign: 'center',
-                          height: '100%'
-                        }}>
-                          <Box
-                            sx={{
-                              width: isMobile ? 56 : 64,
-                              height: isMobile ? 56 : 64,
-                              borderRadius: 4,
-                              bgcolor: isUploaded 
-                                ? '#f59e0b' 
-                                : hasFile 
-                                ? '#2563eb' 
-                                : alpha('#64748b', 0.15),
-                              color: isUploaded || hasFile ? '#fff' : '#64748b',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              mb: 2,
-                              boxShadow: isUploaded ? `0 8px 16px ${alpha('#f59e0b', 0.3)}` : hasFile ? `0 8px 16px ${alpha('#2563eb', 0.2)}` : 'none',
-                            }}
-                          >
-                            {docType.type === 'PROFILE_PHOTO' ? <User size={isMobile ? 28 : 32} /> :
-                            docType.type === 'AADHAAR' ? <ScanLine size={isMobile ? 28 : 32} /> :
-                            docType.type === 'CERTIFICATE' ? <Award size={isMobile ? 28 : 32} /> :
-                            docType.type === 'EXPERIENCE_PROOF' ? <Briefcase size={isMobile ? 28 : 32} /> :
-                            <FileText size={isMobile ? 28 : 32} />}
-                          </Box>
-                          
-                          <Typography 
-                            variant="caption" 
-                            fontWeight={900} 
-                            sx={{ 
-                              textTransform: 'uppercase', 
-                              letterSpacing: '0.05em', 
-                              mb: 0.5,
-                              color: '#1e293b',
-                              fontSize: isMobile ? '0.65rem' : '0.7rem',
-                              display: 'block',
-                              lineHeight: 1.2
-                            }}
-                          >
-                            {docType.label}
-                            {!docType.isOptional && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
-                          </Typography>
-
-                          <Typography 
-                            variant="caption" 
-                            fontWeight={800} 
-                            sx={{ 
-                              textTransform: 'uppercase', 
-                              letterSpacing: '0.1em',
-                              fontSize: '0.6rem',
-                              color: isUploaded ? '#d97706' : hasError ? '#ef4444' : hasFile ? '#2563eb' : '#64748b',
-                              opacity: isUploaded || hasFile ? 1 : 0.6,
-                              mb: 0.5
-                            }}
-                          >
-                            {status}
-                          </Typography>
-
-                          {!isUploaded && !hasFile && (
-                            <Typography 
-                              variant="caption" 
-                              sx={{ 
-                                fontSize: '0.55rem', 
-                                color: '#64748b', 
-                                fontWeight: 700,
-                                mt: 0.5
-                              }}
-                            >
-                              MAX {MAX_FILE_SIZE_MB}MB
-                            </Typography>
-                          )}
-
-                          {hasError && (
-                            <Typography 
-                              variant="caption" 
-                              sx={{ 
-                                fontSize: '0.55rem', 
-                                color: '#ef4444', 
-                                fontWeight: 700,
-                                lineHeight: 1
-                              }}
-                            >
-                              {doc.sizeError}
-                            </Typography>
-                          )}
-
-                          {isUploaded && !formSubmitted && (
-                            <IconButton
-                              size="small"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleDeleteDocument(docType.type);
-                              }}
-                              sx={{
-                                position: 'absolute',
-                                top: 8,
-                                right: 8,
-                                bgcolor: alpha('#ef4444', 0.08),
-                                color: '#ef4444',
-                                '&:hover': { bgcolor: alpha('#ef4444', 0.15) },
-                                width: 24,
-                                height: 24,
-                              }}
-                            >
-                              <XCircle size={18} />
-                            </IconButton>
-                          )}
-
-                          {isUploaded && (
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              fullWidth
-                              startIcon={<Eye size={14} />}
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleCardClick(e);
-                              }}
-                              sx={{
-                                mt: 2,
-                                borderRadius: 2,
-                                textTransform: 'none',
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                py: 0.5,
-                                color: '#3b82f6',
-                                borderColor: alpha('#3b82f6', 0.3),
-                                '&:hover': {
-                                  bgcolor: alpha('#3b82f6', 0.05),
-                                  borderColor: '#3b82f6',
-                                }
-                              }}
-                            >
-                              View Document
-                            </Button>
-                          )}
-
-                          {hasFile && !isUploaded && !formSubmitted && (
-                            <Button
-                              variant="contained"
-                              size="small"
-                              fullWidth
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleUploadDocument(docType.type);
-                              }}
-                              disabled={loading || hasError}
-                              sx={{
-                                mt: 2,
-                                borderRadius: 2,
-                                textTransform: 'none',
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                py: 0.5,
-                                boxShadow: 'none',
-                                bgcolor: hasError ? alpha('#ef4444', 0.1) : undefined,
-                                color: hasError ? '#ef4444' : undefined,
-                                '&:hover': {
-                                  bgcolor: hasError ? alpha('#ef4444', 0.2) : undefined,
-                                }
-                              }}
-                            >
-                              {loading ? <CircularProgress size={14} color="inherit" /> : hasError ? 'Replace File' : 'Upload'}
-                            </Button>
-                          )}
-                        </CardContent>
-                      </Card>
-                  </Grid>
-                );
-              })}
-
-              {/* System Fee Card Integration */}
-              <Grid item xs={6} sm={4} md={2.4}>
-                <Card
-                  sx={{
-                    borderRadius: isMobile ? 4 : 5,
-                    bgcolor: feeStatus === 'PAID' ? alpha('#fff', 1) : feeStatus === 'DEDUCT' ? alpha('#eff6ff', 0.5) : alpha('#f8fafc', 0.5),
-                    border: '2px solid',
-                    borderColor: feeStatus === 'PAID' ? alpha('#10b981', 0.15) : feeStatus === 'DEDUCT' ? alpha('#6366f1', 0.15) : alpha('#64748b', 0.08),
-                    height: '100%',
-                    opacity: 1,
-                  }}
-                >
-                  <CardContent sx={{ 
-                    p: isMobile ? 2 : 3, 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    textAlign: 'center',
-                    height: '100%'
-                  }}>
-                    <Box
-                      sx={{
-                        width: isMobile ? 56 : 64,
-                        height: isMobile ? 56 : 64,
-                        borderRadius: 4,
-                        bgcolor: feeStatus === 'PAID' ? '#10b981' : feeStatus === 'DEDUCT' ? '#6366f1' : alpha('#64748b', 0.15),
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        mb: 2,
-                        boxShadow: feeStatus === 'PAID' ? `0 8px 16px ${alpha('#10b981', 0.3)}` : feeStatus === 'DEDUCT' ? `0 8px 16px ${alpha('#6366f1', 0.3)}` : 'none',
-                      }}
-                    >
-                      <CreditCard size={isMobile ? 28 : 32} />
-                    </Box>
-                    
-                    <Typography 
-                      variant="caption" 
-                      fontWeight={900} 
-                      sx={{ 
-                        textTransform: 'uppercase', 
-                        letterSpacing: '0.05em', 
-                        mb: 0.5,
-                        color: '#1e293b',
-                        fontSize: isMobile ? '0.65rem' : '0.7rem'
-                      }}
-                    >
-                      System Fee
-                    </Typography>
-
-                    <Typography 
-                      variant="caption" 
-                      fontWeight={800} 
-                      sx={{ 
-                        textTransform: 'uppercase', 
-                        letterSpacing: '0.1em',
-                        fontSize: '0.6rem',
-                        color: feeStatus === 'PAID' ? '#059669' : feeStatus === 'DEDUCT' ? '#4f46e5' : '#64748b'
-                      }}
-                    >
-                      {feeStatus === 'PAID' ? 'SETTLED' : feeStatus === 'DEDUCT' ? 'DEFERRED' : 'REQUIRED'}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-
-            {/* Progress indicator */}
-            <Box sx={{ mt: 4, p: 3, bgcolor: alpha('#f8fafc', 1), borderRadius: 2 }}>
-              <Typography variant="body2" fontWeight={600} gutterBottom>
-                Document Upload Progress
-              </Typography>
-              <Box display="flex" gap={1} flexWrap="wrap">
+              {/* Document Grid */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 1.25 : 2, mb: 2.5 }}>
                 {docTypes.map((docType) => {
-                  const isDone = documents[docType.type]?.uploaded;
+                  const doc = documents[docType.type];
+
+                  const handleCardClick = (e: React.MouseEvent) => {
+                    if ((e.target as HTMLElement).closest('button')?.getAttribute('aria-label') === 'delete') return;
+                    if (doc.uploaded) {
+                      const documentToView = doc.existingDoc || tutor?.documents?.find((d: IDocument) => d.documentType === docType.type);
+                      if (documentToView) { setViewingDocument(documentToView); setViewerOpen(true); return; }
+                    }
+                    if (!formSubmitted) {
+                      setSelectedDocType({ type: docType.type, label: docType.label });
+                      setUploadModalOpen(true);
+                    }
+                  };
+
+                  return (
+                    <DocCard
+                      key={docType.type}
+                      docType={docType}
+                      doc={doc}
+                      formSubmitted={formSubmitted}
+                      loading={loading}
+                      onCardClick={handleCardClick}
+                      onDelete={() => handleDeleteDocument(docType.type)}
+                      onUpload={() => handleUploadDocument(docType.type)}
+                      isMobile={isMobile}
+                    />
+                  );
+                })}
+              </Box>
+
+              {/* Progress chips */}
+              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', pt: 1.5, borderTop: '1px solid #F1F5F9' }}>
+                {docTypes.map((dt) => {
+                  const done = documents[dt.type]?.uploaded;
                   return (
                     <Chip
-                      key={docType.type}
-                      label={docType.label}
+                      key={dt.type}
                       size="small"
+                      label={dt.label}
+                      icon={done ? <CheckCircle size={12} /> : <FileText size={12} />}
                       sx={{
-                        bgcolor: isDone ? alpha('#10b981', 0.1) : alpha('#64748b', 0.08),
-                        color: isDone ? '#059669' : '#64748b',
-                        fontWeight: 600,
+                        height: 24, fontSize: '0.7rem', fontWeight: 600, borderRadius: 10,
+                        bgcolor: done ? alpha('#10B981', 0.1) : alpha('#94A3B8', 0.1),
+                        color: done ? '#059669' : '#64748B',
+                        '& .MuiChip-icon': { fontSize: 12 },
                       }}
-                      icon={
-                        isDone ? (
-                          <CheckCircle size={14} color="#059669" />
-                        ) : (
-                          <FileText size={14} color="#64748b" />
-                        )
-                      }
                     />
                   );
                 })}
               </Box>
             </Box>
-          </Box>
-        )}
+          )}
 
-        {/* Step: Payment */}
-        {currentStepId === 'payment' && (
-          <Box>
-            <Box sx={{ mb: isMobile ? 2 : 4 }}>
-              <Typography
-                variant={isMobile ? 'subtitle1' : 'h6'}
-                fontWeight={700}
-                sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
-              >
-                Step 2: Choose Verification Payment Option
-              </Typography>
+          {/* ════ STEP 2: PAYMENT ════ */}
+          {currentStepId === 'payment' && (
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>Verification Fee</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose how you'd like to pay.</Typography>
 
-              {/* Show selected status if already chosen */}
-              {(feeStatus === 'PENDING' || feeStatus === 'DEDUCT') && (
-                <Alert
-                  severity="success"
-                  sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}
-                  icon={<CheckCircle size={isMobile ? 20 : 24} />}
-                >
-                  <Typography variant="body2" fontWeight={600}>
-                    Payment option already selected:{' '}
-                    <strong>
-                      {feeStatus === 'DEDUCT'
-                        ? 'Pay Later (₹700)'
-                        : feeFile
-                        ? 'Pay Now - Screenshot uploaded'
-                        : 'Pay Now (₹500) - Pending screenshot'}
-                    </strong>
-                  </Typography>
+              {tutor?.verificationFeeStatus === 'PAID' ? (
+                <Alert severity="success" icon={<CheckCircle size={20} />} sx={{ borderRadius: 2.5 }}>
+                  <Typography fontWeight={700}>Fee already paid!</Typography>
                 </Alert>
-              )}
-
-              <Typography variant="body2" color="text.secondary" sx={{ mb: isMobile ? 2 : 3 }}>
-                Select your preferred payment method for the verification fee.
-              </Typography>
-            </Box>
-
-            {tutor?.verificationFeeStatus === 'PAID' ? (
-              <Alert severity="success" sx={{ mb: 3 }}>
-                Your verification fee has already been paid!
-              </Alert>
-            ) : (
-              <>
-                {/* Payment Options Info Card */}
-                <Card
-                  variant="outlined"
-                  sx={{
-                    mb: 3,
-                    borderRadius: 3,
-                    borderColor: alpha('#8b5cf6', 0.3),
-                    bgcolor: alpha('#8b5cf6', 0.02),
-                  }}
-                >
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Wallet size={18} color="#8b5cf6" />
-                      Payment Options Explained
-                    </Typography>
-
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={6}>
-                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#3b82f6', 0.05), border: `1px solid ${alpha('#3b82f6', 0.2)}` }}>
-                          <Typography variant="subtitle2" fontWeight={700} color="#2563eb" gutterBottom>
-                            Option 1: One-Time Payment (Recommended)
-                          </Typography>
-                          <Typography variant="body2" color="#475569" sx={{ mb: 1 }}>
-                            • Pay <strong>₹500</strong> now via QR code<br/>
-                            • Scan the QR code provided<br/>
-                            • Upload the payment screenshot<br/>
-                            • Submit your application immediately
-                          </Typography>
-                          <Typography variant="caption" color="#059669" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <ThumbsUp size={12} />
-                            Faster processing, no additional fees
-                          </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {/* Option 1 — Pay Now */}
+                  <Card
+                    variant="outlined"
+                    onClick={() => !formSubmitted && !isFeePaid && setFeeStatus('PENDING')}
+                    sx={{
+                      borderRadius: 3, cursor: (formSubmitted || isFeePaid) ? 'default' : 'pointer',
+                      border: '2px solid',
+                      borderColor: feeStatus === 'PENDING' ? '#2D68C4' : '#E2E8F0',
+                      bgcolor: feeStatus === 'PENDING' ? alpha('#2D68C4', 0.03) : '#fff',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { borderColor: (formSubmitted || isFeePaid) ? undefined : '#2D68C4' },
+                    }}
+                  >
+                    <CardContent sx={{ p: isMobile ? 2 : 2.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: feeStatus === 'PENDING' && !isFeePaid ? 2 : 0 }}>
+                        <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: feeStatus === 'PENDING' ? alpha('#2D68C4', 0.1) : alpha('#94A3B8', 0.1), color: feeStatus === 'PENDING' ? '#2D68C4' : '#94A3B8', display: 'flex' }}>
+                          <CreditCard size={22} />
                         </Box>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#f59e0b', 0.05), border: `1px solid ${alpha('#f59e0b', 0.2)}` }}>
-                          <Typography variant="subtitle2" fontWeight={700} color="#d97706" gutterBottom>
-                            Option 2: Deferred Payment
-                          </Typography>
-                          <Typography variant="body2" color="#475569" sx={{ mb: 1 }}>
-                            • <strong>₹700</strong> will be deducted from first month<br/>
-                            • No upfront payment required now<br/>
-                            • Automatic deduction after first class<br/>
-                            • Additional ₹200 processing fee applies
-                          </Typography>
-                          <Typography variant="caption" color="#f59e0b" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <AlertCircle size={12} />
-                            Higher cost but no immediate payment
-                          </Typography>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography fontWeight={700} fontSize="0.9375rem">Pay Now</Typography>
+                          <Typography fontSize="0.8rem" color="text.secondary">One-time · faster processing</Typography>
                         </Box>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography fontWeight={800} fontSize="1.25rem" color={feeStatus === 'PENDING' ? '#2D68C4' : 'text.primary'}>₹500</Typography>
+                          <Chip label="Recommended" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 700, bgcolor: alpha('#10B981', 0.1), color: '#059669', borderRadius: 10 }} />
+                        </Box>
+                      </Box>
 
-                <Grid container spacing={isMobile ? 2 : 3}>
-                  <Grid item xs={12} md={6}>
-                    <Card
-                      variant="outlined"
-                      onClick={() => !formSubmitted && !isFeePaid && setFeeStatus('PENDING')}
-                      sx={{
-                        borderRadius: isMobile ? 2 : 3,
-                        cursor: (formSubmitted || isFeePaid) ? 'default' : 'pointer',
-                        borderColor:
-                          feeStatus === 'PENDING'
-                            ? alpha('#3b82f6', 0.5)
-                            : alpha('#64748b', 0.1),
-                        bgcolor:
-                          feeStatus === 'PENDING' ? alpha('#3b82f6', 0.02) : 'white',
-                        opacity: (formSubmitted || isFeePaid) ? 0.7 : 1,
-                      }}
-                    >
-                      <CardContent sx={{ p: isMobile ? 2 : 3 }}>
-                        <Box display="flex" alignItems="center" gap={isMobile ? 1.5 : 2} mb={isMobile ? 1.5 : 2}>
+                      {/* QR + Screenshot section */}
+                      {feeStatus === 'PENDING' && !isFeePaid && (
+                        <Box>
+                          {/* QR code */}
                           <Box
-                            sx={{
-                              p: isMobile ? 1 : 1.5,
-                              borderRadius: 2,
-                              bgcolor:
-                                feeStatus === 'PENDING'
-                                  ? alpha('#3b82f6', 0.1)
-                                  : alpha('#64748b', 0.08),
-                              color: feeStatus === 'PENDING' ? '#2563eb' : '#64748b',
-                              minWidth: isMobile ? 40 : 48,
-                              minHeight: isMobile ? 40 : 48,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
+                            sx={{ p: 2, borderRadius: 2, border: '1px solid #E2E8F0', textAlign: 'center', cursor: 'pointer', mb: 1.5, transition: 'all 0.2s', '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.08)', transform: 'scale(1.01)' } }}
+                            onClick={() => setQrModalOpen(true)}
                           >
-                            <CreditCard size={isMobile ? 20 : 24} />
+                            <img src="/verification-qr.png" alt="Payment QR" style={{ width: isMobile ? 110 : 130, height: isMobile ? 110 : 130, display: 'block', margin: '0 auto' }} />
+                            <Button size="small" startIcon={<Maximize2 size={11} />} sx={{ mt: 0.75, fontSize: '0.65rem', color: '#64748B', textTransform: 'none' }}>
+                              Tap to enlarge
+                            </Button>
                           </Box>
-                          <Box>
-                            <Typography variant={isMobile ? 'body2' : 'subtitle2'} fontWeight={700}>
-                              Pay Now
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              ₹{VERIFICATION_FEE_AMOUNT}
-                            </Typography>
-                          </Box>
-                        </Box>
 
-                        {isFeePaid && (
-                          <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
-                            Verification fee already verified.
-                          </Alert>
-                        )}
-
-                        {feeStatus === 'PENDING' && !isFeePaid && (
-                          <>
-                            <Box
-                              sx={{
-                                p: 2,
-                                bgcolor: 'white',
-                                borderRadius: 2,
-                                border: `1px solid ${alpha('#64748b', 0.1)}`,
-                                textAlign: 'center',
-                                mb: 2,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                  boxShadow: `0 4px 12px ${alpha('#000', 0.1)}`,
-                                  transform: 'scale(1.02)',
-                                },
-                              }}
-                              onClick={() => setQrModalOpen(true)}
-                            >
-                              <img
-                                src="/verification-qr.png"
-                                alt="Payment QR"
-                                style={{ width: 120, height: 120 }}
-                              />
-                              <Button
-                                size="small"
-                                startIcon={<Maximize2 size={12} />}
-                                sx={{ mt: 1, textTransform: 'none', fontSize: '0.65rem', color: '#64748b' }}
-                              >
-                                Enlarge QR Code
-                              </Button>
-                            </Box>
-
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0] || null;
-                                setFeeFile(file);
-                                if (file && file.size > MAX_FILE_SIZE_BYTES) {
-                                  setFeeFileError(`File too large. Max ${MAX_FILE_SIZE_MB}MB allowed.`);
-                                } else {
-                                  setFeeFileError(null);
-                                }
-                              }}
-                              style={{ display: 'none' }}
-                              id="fee-file"
+                          {/* Screenshot upload */}
+                          <input type="file" accept="image/*" onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            setFeeFile(file);
+                            setFeeFileError(file && file.size > MAX_FILE_SIZE_BYTES ? `Max ${MAX_FILE_SIZE_MB}MB allowed.` : null);
+                          }} style={{ display: 'none' }} id="fee-file" disabled={formSubmitted} />
+                          <label htmlFor="fee-file">
+                            <Button
+                              component="span" variant={feeFile ? 'contained' : 'outlined'} fullWidth
+                              startIcon={feeFile ? <CheckCircle size={16} /> : <Upload size={16} />}
+                              sx={{ borderRadius: 2.5, textTransform: 'none', fontWeight: 600, py: 1 }}
                               disabled={formSubmitted}
-                            />
-                            <label htmlFor="fee-file">
-                              <Button
-                                component="span"
-                                variant="outlined"
-                                fullWidth
-                                startIcon={<Upload size={18} />}
-                                sx={{
-                                  borderRadius: 2,
-                                  textTransform: 'none',
-                                  fontWeight: 600,
-                                }}
-                                disabled={formSubmitted}
-                              >
-                                {feeFile ? 'Change Screenshot' : 'Upload Payment Screenshot'}
-                              </Button>
-                            </label>
-
-                            {!feeFile && (
-                              <Typography 
-                                variant="caption" 
-                                sx={{ 
-                                  display: 'block', 
-                                  textAlign: 'center', 
-                                  mt: 1, 
-                                  color: 'text.secondary',
-                                  fontSize: '0.65rem',
-                                  fontWeight: 600
-                                }}
-                              >
-                                MAX {MAX_FILE_SIZE_MB}MB
-                              </Typography>
-                            )}
-
-                            {feeFile && (
-                              <Box sx={{ mt: 1, textAlign: 'center' }}>
-                                <Typography
-                                  variant="caption"
-                                  color={feeFileError ? "error.main" : "success.main"}
-                                  sx={{ display: 'block', fontWeight: 600 }}
-                                >
-                                  {feeFileError ? (
-                                    <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                                  ) : (
-                                    <CheckCircle size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                                  )}
-                                  {feeFileError || feeFile.name}
-                                </Typography>
-                              </Box>
-                            )}
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-
-                  {/* Deduct from Salary Option */}
-                  <Grid item xs={12} md={6}>
-                    <Card
-                      variant="outlined"
-                      onClick={() => {
-                        if (!formSubmitted && !isFeePaid) {
-                          setFeeStatus('DEDUCT');
-                          setFeeFile(null);
-                        }
-                      }}
-                      sx={{
-                        borderRadius: 3,
-                        cursor: (formSubmitted || isFeePaid) ? 'default' : 'pointer',
-                        borderColor:
-                          feeStatus === 'DEDUCT'
-                            ? alpha('#f59e0b', 0.5)
-                            : alpha('#64748b', 0.1),
-                        bgcolor:
-                          feeStatus === 'DEDUCT' ? alpha('#f59e0b', 0.02) : 'white',
-                        opacity: (formSubmitted || isFeePaid) ? 0.7 : 1,
-                      }}
-                    >
-                      <CardContent sx={{ p: 3 }}>
-                        <Box display="flex" alignItems="center" gap={2} mb={2}>
-                          <Box
-                            sx={{
-                              p: 1.5,
-                              borderRadius: 2,
-                              bgcolor:
-                                feeStatus === 'DEDUCT'
-                                  ? alpha('#f59e0b', 0.1)
-                                  : alpha('#64748b', 0.08),
-                              color: feeStatus === 'DEDUCT' ? '#d97706' : '#64748b',
-                            }}
-                          >
-                            <CreditCard size={24} />
-                          </Box>
-                          <Box>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              Pay Later
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              ₹{VERIFICATION_FEE_AMOUNT + 200}
-                            </Typography>
-                          </Box>
+                            >
+                              {feeFile ? `✓ ${feeFile.name.length > 24 ? feeFile.name.slice(0, 24) + '…' : feeFile.name}` : 'Upload Payment Screenshot'}
+                            </Button>
+                          </label>
+                          {feeFileError && <Typography fontSize="0.72rem" color="error.main" mt={0.5}>{feeFileError}</Typography>}
+                          {!feeFile && <Typography fontSize="0.68rem" color="text.disabled" textAlign="center" mt={0.5}>Max {MAX_FILE_SIZE_MB}MB · image only</Typography>}
                         </Box>
+                      )}
+                    </CardContent>
+                  </Card>
 
-                        {feeStatus === 'DEDUCT' && (
-                          <Alert severity="info" sx={{ mt: 2 }}>
-                            The fee of ₹700 will be deducted from your first month's salary. This includes an additional ₹200 processing fee.
-                          </Alert>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </Grid>
-              </>
-            )}
-          </Box>
-        )}
-
-        {/* Step: Declaration */}
-        {currentStepId === 'declaration' && (
-          <Box>
-            <Box sx={{ mb: isMobile ? 2 : 4 }}>
-              <Typography
-                variant={isMobile ? 'subtitle1' : 'h6'}
-                fontWeight={700}
-                sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
-              >
-                Step 3: Declaration & Consent
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: isMobile ? 2 : 3 }}>
-                By submitting your application, you must agree to the following terms and conditions.
-              </Typography>
+                  {/* Option 2 — Pay Later */}
+                  <Card
+                    variant="outlined"
+                    onClick={() => { if (!formSubmitted && !isFeePaid) { setFeeStatus('DEDUCT'); setFeeFile(null); } }}
+                    sx={{
+                      borderRadius: 3, cursor: (formSubmitted || isFeePaid) ? 'default' : 'pointer',
+                      border: '2px solid',
+                      borderColor: feeStatus === 'DEDUCT' ? '#F59E0B' : '#E2E8F0',
+                      bgcolor: feeStatus === 'DEDUCT' ? alpha('#F59E0B', 0.03) : '#fff',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <CardContent sx={{ p: isMobile ? 2 : 2.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: feeStatus === 'DEDUCT' ? alpha('#F59E0B', 0.12) : alpha('#94A3B8', 0.1), color: feeStatus === 'DEDUCT' ? '#D97706' : '#94A3B8', display: 'flex' }}>
+                          <Wallet size={22} />
+                        </Box>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography fontWeight={700} fontSize="0.9375rem">Pay Later</Typography>
+                          <Typography fontSize="0.8rem" color="text.secondary">Deducted from first month · no upfront</Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography fontWeight={800} fontSize="1.25rem" color={feeStatus === 'DEDUCT' ? '#D97706' : 'text.primary'}>₹700</Typography>
+                          <Typography fontSize="0.6rem" color="#94A3B8" fontWeight={600}>+₹200 fee</Typography>
+                        </Box>
+                      </Box>
+                      {feeStatus === 'DEDUCT' && (
+                        <Box sx={{ mt: 1.5, p: 1.25, borderRadius: 2, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.2)}` }}>
+                          <Typography fontSize="0.78rem" color="#92400E" fontWeight={600}>₹700 will be deducted from your first month's salary after your first class.</Typography>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Box>
+              )}
             </Box>
+          )}
 
-            <Card
-              variant="outlined"
-              sx={{
-                mb: isMobile ? 2 : 3,
-                borderRadius: isMobile ? 2 : 3,
-                borderColor: alpha('#f59e0b', 0.3),
-                bgcolor: alpha('#f59e0b', 0.02),
-              }}
-            >
-              <CardContent sx={{ p: isMobile ? 2 : 3 }}>
-                <Typography variant={isMobile ? 'body1' : 'subtitle2'} fontWeight={700} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ScanLine size={isMobile ? 16 : 18} color="#d97706" />
-                  Terms & Conditions
-                </Typography>
+          {/* ════ STEP 3: DECLARATION ════ */}
+          {currentStepId === 'declaration' && (
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>Declaration & Consent</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Please read and accept all terms before proceeding.</Typography>
 
-                <Alert severity="warning" sx={{ mb: isMobile ? 2 : 3, borderRadius: 2 }}>
-                  <Typography variant="body2">
-                    Any false or misleading information may lead to rejection or permanent disqualification from the platform.
-                  </Typography>
-                </Alert>
-
-                <FormGroup>
-                  <FormControlLabel
-                    control={
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                {[
+                  { state: agreedToTerms, setter: setAgreedToTerms, label: 'I agree to the Terms & Conditions and Policies of the platform' },
+                  { state: confirmedAuthentic, setter: setConfirmedAuthentic, label: 'All uploaded documents are genuine, authentic, and not fake' },
+                  { state: understandConsequences, setter: setUnderstandConsequences, label: 'I understand false or misleading information may lead to rejection or permanent disqualification' },
+                ].map((item, i) => (
+                  <Card
+                    key={i}
+                    variant="outlined"
+                    onClick={() => !formSubmitted && item.setter(!item.state)}
+                    sx={{
+                      borderRadius: 2.5, cursor: formSubmitted ? 'default' : 'pointer',
+                      border: '2px solid',
+                      borderColor: item.state ? alpha('#10B981', 0.5) : '#E2E8F0',
+                      bgcolor: item.state ? alpha('#10B981', 0.03) : '#fff',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <CardContent sx={{ p: '14px !important', display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
                       <Checkbox
-                        checked={agreedToTerms}
-                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        checked={item.state}
+                        onChange={(e) => !formSubmitted && item.setter(e.target.checked)}
                         disabled={formSubmitted}
-                        sx={{ '& .MuiSvgIcon-root': { fontSize: isMobile ? 24 : 20 } }}
+                        onClick={(e) => e.stopPropagation()}
+                        size="small"
+                        sx={{ p: 0, mt: 0.125, color: item.state ? '#10B981' : '#CBD5E1', '&.Mui-checked': { color: '#10B981' } }}
                       />
-                    }
-                    label={
-                      <Typography variant={isMobile ? 'body2' : 'body2'} color="#475569">
-                        I agree to the Terms & Conditions and Policies of the platform
+                      <Typography fontSize="0.8375rem" color={item.state ? '#065F46' : '#475569'} lineHeight={1.45} fontWeight={item.state ? 600 : 400}>
+                        {item.label}
                       </Typography>
-                    }
-                    sx={{ mb: isMobile ? 1.5 : 1, alignItems: 'flex-start' }}
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={confirmedAuthentic}
-                        onChange={(e) => setConfirmedAuthentic(e.target.checked)}
-                        disabled={formSubmitted}
-                        sx={{ '& .MuiSvgIcon-root': { fontSize: isMobile ? 24 : 20 } }}
-                      />
-                    }
-                    label={
-                      <Typography variant={isMobile ? 'body2' : 'body2'} color="#475569">
-                        I confirm that all uploaded documents are genuine, authentic, and not fake
-                      </Typography>
-                    }
-                    sx={{ mb: isMobile ? 1.5 : 1, alignItems: 'flex-start' }}
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={understandConsequences}
-                        onChange={(e) => setUnderstandConsequences(e.target.checked)}
-                        disabled={formSubmitted}
-                        sx={{ '& .MuiSvgIcon-root': { fontSize: isMobile ? 24 : 20 } }}
-                      />
-                    }
-                    label={
-                      <Typography variant={isMobile ? 'body2' : 'body2'} color="#475569">
-                        I understand that any false or misleading information may lead to rejection or permanent disqualification
-                      </Typography>
-                    }
-                    sx={{ mb: isMobile ? 1.5 : 1, alignItems: 'flex-start' }}
-                  />
-                </FormGroup>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
 
-                <Box
-                  sx={{
-                    mt: 3,
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: alpha('#fef3c7', 0.5),
-                    border: `1px solid ${alpha('#f59e0b', 0.2)}`,
-                  }}
-                >
-                  <Typography variant="caption" fontWeight={700} color="#92400e" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                    <XCircle size={14} />
-                    Common Reasons for Rejection
-                  </Typography>
-                  <Grid container spacing={1}>
-                    {[
-                      'Incomplete document uploads',
-                      'Blurry or unclear document images',
-                      'Information mismatch with uploaded documents',
-                      'Fake or forged documents',
-                      'Missing payment proof',
-                    ].map((reason, i) => (
-                      <Grid item xs={12} sm={6} key={i}>
-                        <Typography variant="caption" color="#a16207" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: '#f59e0b' }} />
-                          {reason}
-                        </Typography>
-                      </Grid>
+              {/* Rejection reasons — pill chips */}
+              <Box sx={{ mt: 2.5, p: 1.5, borderRadius: 2, bgcolor: alpha('#FEF3C7', 0.8), border: `1px solid ${alpha('#F59E0B', 0.25)}` }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                  <XCircle size={14} color="#D97706" />
+                  <Typography fontSize="0.72rem" fontWeight={700} color="#92400E" textTransform="uppercase" letterSpacing="0.04em">Common Rejection Reasons</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                  {['Blurry docs', 'Info mismatch', 'Missing payment', 'Incomplete upload', 'Fake documents'].map((r) => (
+                    <Chip key={r} label={r} size="small" sx={{ height: 22, fontSize: '0.68rem', fontWeight: 600, bgcolor: alpha('#F59E0B', 0.12), color: '#92400E', borderRadius: 10 }} />
+                  ))}
+                </Box>
+              </Box>
+            </Box>
+          )}
+
+          {/* ════ STEP 4: REVIEW ════ */}
+          {currentStepId === 'review' && (
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>What Happens Next</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Your manager will review your profile and documents.</Typography>
+
+              {/* Timeline — vertical on mobile */}
+              <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 1.25 : 2, mb: 2.5 }}>
+                {[
+                  { icon: <Clock size={22} color="#2563EB" />, bg: alpha('#3B82F6', 0.1), title: '2–3 Business Days', sub: 'Typical review timeline' },
+                  { icon: <FileCheck size={22} color="#8B5CF6" />, bg: alpha('#8B5CF6', 0.1), title: 'Manager Review', sub: 'Documents & profile check' },
+                  { icon: <ShieldCheck size={22} color="#059669" />, bg: alpha('#10B981', 0.1), title: 'Decision Notified', sub: 'Via app notification' },
+                ].map((item, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      flex: 1, p: 1.75, borderRadius: 2.5,
+                      border: '1px solid #E2E8F0', bgcolor: '#FAFAFA',
+                      display: 'flex', alignItems: isMobile ? 'center' : 'flex-start',
+                      flexDirection: isMobile ? 'row' : 'column',
+                      gap: isMobile ? 1.5 : 1,
+                    }}
+                  >
+                    <Box sx={{ p: 1.25, borderRadius: 2.5, bgcolor: item.bg, display: 'flex', flexShrink: 0 }}>{item.icon}</Box>
+                    <Box>
+                      <Typography fontWeight={700} fontSize="0.875rem">{item.title}</Typography>
+                      <Typography fontSize="0.78rem" color="text.secondary">{item.sub}</Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+
+              {/* Application Summary */}
+              <Box sx={{ p: 2, borderRadius: 2.5, border: '1px solid #E2E8F0', bgcolor: '#FAFAFA' }}>
+                <Typography fontWeight={700} fontSize="0.8125rem" sx={{ mb: 1.25 }}>Application Summary</Typography>
+
+                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1.25 }}>
+                  {docTypes.map((dt) => {
+                    const done = documents[dt.type]?.uploaded;
+                    return (
+                      <Chip key={dt.type} size="small" label={dt.label}
+                        icon={done ? <CheckCircle size={11} /> : <FileText size={11} />}
+                        color={done ? 'success' : 'default'}
+                        sx={{ height: 24, fontSize: '0.7rem', fontWeight: 600, borderRadius: 10 }}
+                      />
+                    );
+                  })}
+                </Box>
+
+                <Chip
+                  size="small"
+                  label={tutor?.verificationFeeStatus === 'PAID' ? 'Fee: Paid' : feeStatus === 'DEDUCT' ? 'Fee: Pay Later ₹700' : 'Fee: Pay Now ₹500'}
+                  icon={<CreditCard size={11} />}
+                  color="primary"
+                  sx={{ height: 24, fontSize: '0.7rem', fontWeight: 600, borderRadius: 10 }}
+                />
+              </Box>
+            </Box>
+          )}
+
+          {/* ════ STEP 5: SUBMIT ════ */}
+          {currentStepId === 'submit' && (
+            <Box sx={{ textAlign: 'center' }}>
+              <Box sx={{ width: 72, height: 72, borderRadius: '50%', bgcolor: alpha('#6366F1', 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2.5, boxShadow: `0 8px 24px ${alpha('#6366F1', 0.2)}` }}>
+                <ShieldCheck size={36} color="#6366F1" />
+              </Box>
+
+              <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={800} sx={{ mb: 1 }}>Ready to Submit!</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 420, mx: 'auto' }}>
+                By submitting, you confirm all information is accurate and all documents are genuine. We'll review within 2–3 business days.
+              </Typography>
+
+              {/* Outcome cards */}
+              <Box sx={{ display: 'flex', gap: 1.5, flexDirection: isMobile ? 'column' : 'row', textAlign: 'left', mb: 2 }}>
+                <Box sx={{ flex: 1, p: 1.75, borderRadius: 2.5, bgcolor: alpha('#10B981', 0.06), border: `1px solid ${alpha('#10B981', 0.2)}` }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <CheckCircle size={15} color="#059669" />
+                    <Typography fontWeight={700} fontSize="0.8125rem" color="#065F46">If Approved</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {['Profile activated', 'Start receiving classes', 'Full dashboard access'].map(p => (
+                      <Typography key={p} fontSize="0.75rem" color="#065F46">• {p}</Typography>
                     ))}
-                  </Grid>
-                </Box>
-              </CardContent>
-            </Card>
-          </Box>
-        )}
-
-        {/* Step: Review */}
-        {currentStepId === 'review' && (
-          <Box>
-            <Box sx={{ mb: 4 }}>
-              <Typography
-                variant="h6"
-                fontWeight={700}
-                sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
-              >
-                Step 4: Review Process
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Here's what happens after you submit your application. Your respective manager will review your profile and documents.
-              </Typography>
-            </Box>
-
-            <Card
-              variant="outlined"
-              sx={{
-                mb: 3,
-                borderRadius: 3,
-                borderColor: alpha('#10b981', 0.3),
-                bgcolor: alpha('#10b981', 0.02),
-              }}
-            >
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Clock size={18} color="#059669" />
-                  What to Expect
-                </Typography>
-
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ textAlign: 'center', p: 2 }}>
-                      <Box
-                        sx={{
-                          width: 56,
-                          height: 56,
-                          borderRadius: '50%',
-                          bgcolor: alpha('#3b82f6', 0.1),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mx: 'auto',
-                          mb: 2,
-                        }}
-                      >
-                        <Clock size={28} color="#2563eb" />
-                      </Box>
-                      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                        Review Timeline
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Verification typically takes 2-3 business days depending on application volume
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ textAlign: 'center', p: 2 }}>
-                      <Box
-                        sx={{
-                          width: 56,
-                          height: 56,
-                          borderRadius: '50%',
-                          bgcolor: alpha('#8b5cf6', 0.1),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mx: 'auto',
-                          mb: 2,
-                        }}
-                      >
-                        <FileCheck size={28} color="#8b5cf6" />
-                      </Box>
-                      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                        Manager Review
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Your manager will review all documents and may contact you for clarification
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <Box sx={{ textAlign: 'center', p: 2 }}>
-                      <Box
-                        sx={{
-                          width: 56,
-                          height: 56,
-                          borderRadius: '50%',
-                          bgcolor: alpha('#10b981', 0.1),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mx: 'auto',
-                          mb: 2,
-                        }}
-                      >
-                        <ShieldCheck size={28} color="#059669" />
-                      </Box>
-                      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                        Final Decision
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        You'll receive notification once your verification is complete
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-
-                <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: alpha('#f8fafc', 1), border: `1px dashed ${alpha('#cbd5e1', 1)}` }}>
-                  <Typography variant="caption" fontWeight={700} color="#64748b" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                    <ThumbsUp size={14} color="#10b981" />
-                    Important Notes
-                  </Typography>
-                  <Typography variant="caption" color="#64748b" component="div" sx={{ pl: 1 }}>
-                    • Keep your phone and email accessible for any clarification requests<br/>
-                    • Respond promptly to any additional document requests<br/>
-                    • Verification time may vary based on current application volume
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* Application Summary */}
-            <Card
-              variant="outlined"
-              sx={{
-                borderRadius: 3,
-                borderColor: alpha('#64748b', 0.2),
-              }}
-            >
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 2 }}>
-                  Application Summary
-                </Typography>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Uploaded Documents
-                  </Typography>
-                  <Box display="flex" gap={1} flexWrap="wrap">
-                    {docTypes.map((docType) => {
-                      const isDone = documents[docType.type]?.uploaded;
-                      return (
-                        <Chip
-                          key={docType.type}
-                          label={docType.label}
-                          size="small"
-                          color={isDone ? 'success' : 'default'}
-                          icon={isDone ? <CheckCircle size={14} /> : <FileText size={14} />}
-                        />
-                      );
-                    })}
                   </Box>
                 </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Payment Option Selected
-                  </Typography>
-                  <Chip
-                    label={
-                      tutor?.verificationFeeStatus === 'PAID'
-                        ? 'Paid'
-                        : feeStatus === 'DEDUCT'
-                        ? 'Deduct from Salary (₹700)'
-                        : 'One-Time Payment (₹500)'
-                    }
-                    color="primary"
-                    size="small"
-                    icon={<CreditCard size={14} />}
-                  />
+                <Box sx={{ flex: 1, p: 1.75, borderRadius: 2.5, bgcolor: alpha('#EF4444', 0.05), border: `1px solid ${alpha('#EF4444', 0.2)}` }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+                    <XCircle size={15} color="#DC2626" />
+                    <Typography fontWeight={700} fontSize="0.8125rem" color="#991B1B">If Rejected</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {['Detailed rejection reasons', 'Can re-apply after fixes', 'Contact support if needed'].map(p => (
+                      <Typography key={p} fontSize="0.75rem" color="#991B1B">• {p}</Typography>
+                    ))}
+                  </Box>
                 </Box>
-              </CardContent>
-            </Card>
-          </Box>
-        )}
+              </Box>
 
-        {/* Step: Submit */}
-        {currentStepId === 'submit' && (
-          <Box>
-            <Box sx={{ mb: 4 }}>
-              <Typography
-                variant="h6"
-                fontWeight={700}
-                sx={{ mb: 2, fontFamily: "'Manrope', sans-serif" }}
-              >
-                Step 5: Submit & Verification Outcome
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Review your complete application and submit for verification. Here's what happens next.
-              </Typography>
+              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha('#2D68C4', 0.06), border: `1px solid ${alpha('#2D68C4', 0.15)}`, display: 'flex', gap: 1, alignItems: 'flex-start', textAlign: 'left' }}>
+                <Info size={15} color="#2D68C4" style={{ flexShrink: 0, marginTop: 1 }} />
+                <Typography fontSize="0.78rem" color="#1E40AF">Ensure all documents are clear, readable, and info matches your profile before submitting.</Typography>
+              </Box>
             </Box>
+          )}
+        </Paper>
 
-            {/* Final Review Card */}
-            <Card
+        {/* ── Desktop Navigation ── */}
+        {!isMobile && (
+          <Box display="flex" justifyContent="space-between" gap={2}>
+            <Button
               variant="outlined"
-              sx={{
-                mb: 3,
-                borderRadius: 3,
-                borderColor: alpha('#059669', 0.3),
-                bgcolor: alpha('#10b981', 0.02),
-              }}
+              onClick={handleBack}
+              disabled={activeStep === 0 || formSubmitted}
+              startIcon={<ChevronLeft size={18} />}
+              sx={{ borderRadius: 2.5, textTransform: 'none', fontWeight: 600, px: 3 }}
             >
-              <CardContent sx={{ p: 3 }}>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ShieldCheck size={18} color="#059669" />
-                  Final Confirmation
-                </Typography>
-
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#10b981', 0.05), border: `1px solid ${alpha('#10b981', 0.2)}`, height: '100%' }}>
-                      <Typography variant="subtitle2" fontWeight={700} color="#059669" gutterBottom>
-                        If Approved
-                      </Typography>
-                      <Typography variant="body2" color="#475569">
-                        • Your profile will be activated<br/>
-                        • You will start receiving opportunities/classes<br/>
-                        • Full access to tutor dashboard<br/>
-                        • Can begin teaching immediately
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#ef4444', 0.05), border: `1px solid ${alpha('#ef4444', 0.2)}`, height: '100%' }}>
-                      <Typography variant="subtitle2" fontWeight={700} color="#dc2626" gutterBottom>
-                        If Rejected
-                      </Typography>
-                      <Typography variant="body2" color="#475569">
-                        • You will receive detailed reasons for rejection<br/>
-                        • You can apply for re-verification after improvements<br/>
-                        • Fix the issues mentioned and resubmit<br/>
-                        • Contact support if you need assistance
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-
-            {/* Important Reminders */}
-            <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
-              <Typography variant="body2" fontWeight={600} gutterBottom>
-                Before Submitting:
-              </Typography>
-              <Typography variant="body2">
-                • Ensure all documents are clear and readable<br/>
-                • Verify that all information matches your uploaded documents<br/>
-                • Double-check your payment status<br/>
-                • Incomplete applications will not be processed
-              </Typography>
-            </Alert>
-
-            {/* Ready to Submit */}
-            <Card
-              variant="outlined"
-              sx={{
-                borderRadius: 3,
-                borderColor: alpha('#6366f1', 0.3),
-                bgcolor: alpha('#6366f1', 0.02),
-                textAlign: 'center',
-              }}
+              Back
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleNext}
+              disabled={!canProceedToNextStep() || loading || formSubmitted}
+              endIcon={currentStepId === 'submit' ? <CheckCircle size={18} /> : <ChevronRight size={18} />}
+              sx={{ borderRadius: 2.5, textTransform: 'none', fontWeight: 600, px: 4, bgcolor: currentStepId === 'submit' ? '#10b981' : undefined, '&:hover': { bgcolor: currentStepId === 'submit' ? '#059669' : undefined } }}
             >
-              <CardContent sx={{ p: 4 }}>
-                <Box
-                  sx={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: '50%',
-                    bgcolor: alpha('#6366f1', 0.1),
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    mx: 'auto',
-                    mb: 2,
-                  }}
-                >
-                  <CheckCircle size={32} color="#6366f1" />
-                </Box>
-                <Typography variant="h6" fontWeight={700} gutterBottom>
-                  Ready to Submit!
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  By clicking submit, you confirm that all information provided is accurate and all documents are genuine. Our team will review your application within 2-3 business days.
-                </Typography>
-              </CardContent>
-            </Card>
+              {loading ? <CircularProgress size={20} color="inherit" /> : currentStepId === 'submit' ? 'Submit Application' : 'Continue'}
+            </Button>
           </Box>
         )}
-      </Paper>
+      </Container>
 
-      {/* Navigation Buttons */}
-      <Box display="flex" justifyContent="space-between" mt={isMobile ? 2 : 3} gap={isMobile ? 1 : 2}>
-        <Button
-          variant="outlined"
-          onClick={handleBack}
-          disabled={activeStep === 0 || formSubmitted}
-          startIcon={<ChevronLeft size={isMobile ? 16 : 18} />}
-          sx={{ 
-            borderRadius: 2, 
-            textTransform: 'none', 
-            fontWeight: 600,
-            minHeight: isMobile ? 48 : 40,
-            px: isMobile ? 2 : 3,
-            fontSize: isMobile ? '0.875rem' : '0.8125rem',
-          }}
-        >
-          {isMobile ? 'Back' : 'Back'}
-        </Button>
-
-        <Button
-          variant="contained"
-          onClick={handleNext}
-          disabled={!canProceedToNextStep() || loading || formSubmitted}
-          endIcon={activeStep === 4 ? <CheckCircle size={isMobile ? 16 : 18} /> : <ChevronRight size={isMobile ? 16 : 18} />}
-          sx={{
-            borderRadius: 2,
-            textTransform: 'none',
-            fontWeight: 600,
-            minHeight: isMobile ? 48 : 40,
-            px: isMobile ? 3 : 4,
-            fontSize: isMobile ? '0.875rem' : '0.8125rem',
-            bgcolor: activeStep === 4 ? '#10b981' : undefined,
-            '&:hover': {
-              bgcolor: activeStep === 4 ? '#059669' : undefined,
-            },
-          }}
-        >
-          {loading ? (
-            <CircularProgress size={isMobile ? 24 : 20} color="inherit" />
-          ) : currentStepId === 'submit' ? (
-            'Submit'
-          ) : (
-            'Next'
-          )}
-        </Button>
-      </Box>
-
-      {/* QR Modal */}
-      <Dialog
-        open={qrModalOpen}
-        onClose={() => setQrModalOpen(false)}
-        maxWidth="sm"
-        fullWidth={isMobile}
-        PaperProps={{
-          sx: {
-            borderRadius: isMobile ? 3 : 4,
-            p: isMobile ? 2 : 3,
-            textAlign: 'center',
-            mx: isMobile ? 2 : 'auto',
-          },
-        }}
-      >
-        <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={700} gutterBottom>
-          Scan to Pay
-        </Typography>
-        <Box sx={{ p: isMobile ? 1 : 2 }}>
-          <img
-            src="/verification-qr.png"
-            alt="Payment QR"
-            style={{ width: isMobile ? '100%' : 280, height: 'auto', maxWidth: 280, maxHeight: 280 }}
-          />
+      {/* ── Mobile Sticky Nav ── */}
+      {isMobile && (
+        <Box sx={{
+          position: 'fixed', bottom: 64, left: 0, right: 0, zIndex: 1400,
+          bgcolor: '#fff', borderTop: '1px solid #E2E8F0',
+          borderBottom: '1px solid #E2E8F0',
+          px: 2, py: 1.5,
+          display: 'flex', gap: 1.25, alignItems: 'center',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.06)',
+        }}>
+          <Button
+            variant="outlined"
+            onClick={handleBack}
+            disabled={activeStep === 0 || formSubmitted}
+            startIcon={<ChevronLeft size={18} />}
+            sx={{ borderRadius: 2.5, textTransform: 'none', fontWeight: 600, py: 1.25, minWidth: 90, flex: '0 0 auto' }}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleNext}
+            disabled={!canProceedToNextStep() || loading || formSubmitted}
+            endIcon={currentStepId === 'submit' ? <CheckCircle size={18} /> : <ChevronRight size={18} />}
+            fullWidth
+            sx={{
+              borderRadius: 2.5, textTransform: 'none', fontWeight: 700, py: 1.25, fontSize: '0.9375rem',
+              bgcolor: currentStepId === 'submit' ? '#10b981' : undefined,
+              '&:hover': { bgcolor: currentStepId === 'submit' ? '#059669' : undefined },
+              '&.Mui-disabled': { bgcolor: alpha('#2D68C4', 0.12) },
+            }}
+          >
+            {loading ? <CircularProgress size={22} color="inherit" /> : currentStepId === 'submit' ? 'Submit Application' : 'Continue'}
+          </Button>
         </Box>
-        <Typography variant="body1" color="text.secondary" fontWeight={600} gutterBottom>
-          Amount: ₹{VERIFICATION_FEE_AMOUNT}
-        </Typography>
-        <Typography variant={isMobile ? 'caption' : 'body2'} color="text.secondary" display="block" sx={{ mb: isMobile ? 2 : 3 }}>
-          KAMALJEET DANGI SO VINOD SINGH
-        </Typography>
-        <Button
-          variant="contained"
-          onClick={() => setQrModalOpen(false)}
-          fullWidth={isMobile}
-          sx={{ 
-            borderRadius: 2, 
-            textTransform: 'none',
-            minHeight: isMobile ? 48 : 40,
-            fontWeight: 600,
-          }}
-        >
-          Close
-        </Button>
+      )}
+
+      {/* ── QR Modal ── */}
+      <Dialog open={qrModalOpen} onClose={() => setQrModalOpen(false)} maxWidth="xs" fullWidth={isMobile} PaperProps={{ sx: { borderRadius: 4, p: isMobile ? 2 : 3, textAlign: 'center', mx: isMobile ? 2 : 'auto' } }}>
+        <Typography variant="h6" fontWeight={700} gutterBottom>Scan to Pay</Typography>
+        <Box sx={{ p: 1.5 }}>
+          <img src="/verification-qr.png" alt="Payment QR" style={{ width: '100%', maxWidth: 260, height: 'auto', display: 'block', margin: '0 auto' }} />
+        </Box>
+        <Typography variant="h6" fontWeight={800} color="primary.main">₹{VERIFICATION_FEE_AMOUNT}</Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>KAMALJEET DANGI SO VINOD SINGH</Typography>
+        <Button variant="contained" onClick={() => setQrModalOpen(false)} fullWidth sx={{ borderRadius: 2.5, textTransform: 'none', fontWeight: 600, py: 1.25 }}>Done</Button>
       </Dialog>
-      <DocumentViewerModal
-        open={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        document={viewingDocument}
-      />
+
+      <DocumentViewerModal open={viewerOpen} onClose={() => setViewerOpen(false)} document={viewingDocument} />
       {selectedDocType && (
         <DocumentUploadModal
           open={uploadModalOpen}
-          onClose={() => {
-            setUploadModalOpen(false);
-            setSelectedDocType(null);
-          }}
+          onClose={() => { setUploadModalOpen(false); setSelectedDocType(null); }}
           docType={selectedDocType}
           onUpload={(file) => handleUploadDocument(selectedDocType.type, file)}
           loading={loading}
         />
       )}
-    </Container>
+    </Box>
   );
 };
 
