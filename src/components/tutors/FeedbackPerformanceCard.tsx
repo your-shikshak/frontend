@@ -26,6 +26,7 @@ import EmptyState from '../common/EmptyState';
 import MetricsCard from '../dashboard/MetricsCard';
 import { getMyProfile, getTutorPerformanceMetrics } from '../../services/tutorService';
 import { ITutor, ITutorPerformanceMetrics } from '../../types';
+import { resolveTierLabel, tierToMuiColor } from '../../utils/tier';
 
 const clamp = (val: number, min: number, max: number) => {
   if (Number.isNaN(val as any)) return min;
@@ -34,25 +35,8 @@ const clamp = (val: number, min: number, max: number) => {
 
 const formatPercentage = (value: number) => `${(value ?? 0).toFixed(1)}%`;
 
-const getTierColor = (tier?: string): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
-  switch ((tier || '').toUpperCase()) {
-    case 'BRONZE':
-      return 'warning';
-    case 'SILVER':
-      return 'default';
-    case 'GOLD':
-      return 'success';
-    case 'PLATINUM':
-      return 'info';
-    default:
-      return 'default';
-  }
-};
-
-const getTierLabel = (tier?: string) => {
-  const t = (tier || '').toLowerCase();
-  return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)} Tier` : 'Tier';
-};
+const getTierColor = (tier?: string) => tierToMuiColor(tier);
+const getTierLabel = (tier?: string) => `${resolveTierLabel(tier)} Tier`;
 
 const FeedbackPerformanceCard: React.FC = () => {
   const [tutorProfile, setTutorProfile] = useState<ITutor | null>(null);

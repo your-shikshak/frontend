@@ -6,6 +6,7 @@ import {
   ShieldAlert, Eye, ScanLine, XCircle
 } from 'lucide-react';
 import { ITutor, IDocument } from '../../types';
+import { preferTier } from '../../utils/tier';
 import { getMyProfile, uploadDocument, getTutorById, updateVerificationFeeStatus } from '../../services/tutorService';
 import { useAuth } from '../../hooks/useAuth';
 import React, { useEffect, useState, useMemo } from 'react';
@@ -166,6 +167,9 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
 
     return Object.values(groups).filter(g => g.city !== 'Other' || g.areas.length > 0);
   }, [displayTutor?.preferredCities, displayTutor?.preferredLocations]);
+
+  const resolvedTier = preferTier(displayTutor?.tier, displayTutor?.experienceHours);
+  const tierTone = (resolvedTier || '').toUpperCase();
 
   const [expandedLocations, setExpandedLocations] = useState<Record<string, boolean>>({});
 
@@ -426,10 +430,10 @@ const MUIProfileCard: React.FC<MUIProfileCardProps> = ({ tutorId }) => {
                 )}
               </div>
               <div className="px-5 py-2 rounded-full bg-white border border-slate-100 shadow-md flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${displayTutor.tier?.includes('GOLD') ? 'bg-amber-400' : displayTutor.tier?.includes('SILVER') ? 'bg-slate-400' : 'bg-orange-500'}`} />
+                <div className={`w-2 h-2 rounded-full ${tierTone.includes('GOLD') ? 'bg-amber-400' : tierTone.includes('SILVER') ? 'bg-slate-400' : tierTone.includes('PLATINUM') ? 'bg-indigo-400' : 'bg-orange-500'}`} />
                 <span className="text-[10px] font-black tracking-[0.15em] uppercase text-slate-500">
-                  Tier: <span className={displayTutor.tier?.includes('GOLD') ? 'text-amber-600' : displayTutor.tier?.includes('SILVER') ? 'text-slate-600' : 'text-orange-600'}>
-                    {displayTutor.tier?.split('(')[1]?.replace(')', '') || 'Bronze'}
+                  Tier: <span className={tierTone.includes('GOLD') ? 'text-amber-600' : tierTone.includes('SILVER') ? 'text-slate-600' : tierTone.includes('PLATINUM') ? 'text-indigo-600' : 'text-orange-600'}>
+                    {resolvedTier}
                   </span>
                 </span>
               </div>
