@@ -141,8 +141,8 @@ function DocCard({ docType, doc, formSubmitted, loading, onCardClick, onDelete, 
   const hasError = !!doc.sizeError;
 
   const stateColor = isUploaded ? '#10B981' : hasError ? '#EF4444' : hasFile ? '#2D68C4' : '#94A3B8';
-  const iconBg = isUploaded ? '#10B981' : hasFile ? '#2D68C4' : alpha('#94A3B8', 0.15);
-  const iconColor = isUploaded || hasFile ? '#fff' : '#64748B';
+  const iconBg = isUploaded ? '#10B981' : hasError ? '#EF4444' : hasFile ? '#2D68C4' : alpha('#94A3B8', 0.15);
+  const iconColor = isUploaded || hasFile || hasError ? '#fff' : '#64748B';
 
   return (
     <Card
@@ -150,8 +150,8 @@ function DocCard({ docType, doc, formSubmitted, loading, onCardClick, onDelete, 
       sx={{
         borderRadius: 3,
         border: '2px solid',
-        borderColor: isUploaded ? alpha('#10B981', 0.4) : alpha('#E2E8F0', 1),
-        bgcolor: isUploaded ? alpha('#10B981', 0.03) : '#fff',
+        borderColor: isUploaded ? alpha('#10B981', 0.4) : hasError ? alpha('#EF4444', 0.5) : alpha('#E2E8F0', 1),
+        bgcolor: isUploaded ? alpha('#10B981', 0.03) : hasError ? alpha('#EF4444', 0.03) : '#fff',
         cursor: formSubmitted && !isUploaded ? 'default' : 'pointer',
         transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
         position: 'relative',
@@ -185,7 +185,7 @@ function DocCard({ docType, doc, formSubmitted, loading, onCardClick, onDelete, 
           width: isMobile ? 52 : 60, height: isMobile ? 52 : 60,
           borderRadius: 3, bgcolor: iconBg, color: iconColor,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: isUploaded ? `0 6px 16px ${alpha('#10B981', 0.28)}` : hasFile ? `0 6px 16px ${alpha('#2D68C4', 0.2)}` : 'none',
+          boxShadow: isUploaded ? `0 6px 16px ${alpha('#10B981', 0.28)}` : hasError ? `0 6px 16px ${alpha('#EF4444', 0.22)}` : hasFile ? `0 6px 16px ${alpha('#2D68C4', 0.2)}` : 'none',
           transition: 'all 0.25s ease',
         }}>
           {docType.icon}
@@ -208,8 +208,15 @@ function DocCard({ docType, doc, formSubmitted, loading, onCardClick, onDelete, 
           bgcolor: isUploaded ? alpha('#10B981', 0.1) : hasError ? alpha('#EF4444', 0.1) : hasFile ? alpha('#2D68C4', 0.1) : alpha('#94A3B8', 0.1),
           color: stateColor, fontSize: '0.58rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em',
         }}>
-          {isUploaded ? '✓ Done' : hasError ? 'Too Large' : hasFile ? 'Ready' : `Max ${MAX_FILE_SIZE_MB}MB`}
+          {isUploaded ? '✓ Done' : hasError ? '✗ Too Large' : hasFile ? 'Ready' : `Max ${MAX_FILE_SIZE_MB}MB`}
         </Box>
+
+        {/* Size error message */}
+        {hasError && (
+          <Typography sx={{ fontSize: '0.62rem', color: '#EF4444', fontWeight: 700, lineHeight: 1.3, textAlign: 'center', px: 0.5 }}>
+            {doc.sizeError}
+          </Typography>
+        )}
 
         {/* Action buttons */}
         {isUploaded && (
