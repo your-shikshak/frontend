@@ -146,9 +146,9 @@ export default function TutorVerificationPage() {
               <strong>Exp:</strong> {t.experienceHours} hrs
             </Typography>
           </Box>
-            <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-              <strong>Subjects:</strong> {formatSubjectDisplay(t.subjects)}
-            </Typography>
+          <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+            <strong>Subjects:</strong> {formatSubjectDisplay(t.subjects)}
+          </Typography>
 
           <Stack spacing={1} sx={{ mt: 2 }}>
             <Button
@@ -658,8 +658,8 @@ export default function TutorVerificationPage() {
                     options={subjectsList}
                     getOptionLabel={(option) => getOptionLabel(option)}
                     value={
-                      subjectsList.find(s => s._id === filters.subjects) || 
-                      subjectOptions.find(o => o._id === filters.subjects || o.value === filters.subjects) || 
+                      subjectsList.find(s => s._id === filters.subjects) ||
+                      subjectOptions.find(o => o._id === filters.subjects || o.value === filters.subjects) ||
                       null
                     }
                     onChange={(_e, newValue) => handleFilterChange('subjects', newValue ? (newValue._id || newValue.value) : '')}
@@ -799,7 +799,7 @@ export default function TutorVerificationPage() {
                           </TableCell>
                           <TableCell>
                             <Box display="flex" alignItems="center" gap={2}>
-                              <Avatar 
+                              <Avatar
                                 src={t.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl}
                                 imgProps={{
                                   crossOrigin: 'anonymous',
