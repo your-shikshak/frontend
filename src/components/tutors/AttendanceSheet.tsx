@@ -45,6 +45,19 @@ function toCsvValue(value: string | number | undefined): string {
   return s;
 }
 
+function formatMarkedAt(markedAt?: string): string {
+  if (!markedAt) return '';
+  const d = new Date(markedAt);
+  if (Number.isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
+
 const AttendanceSheet = forwardRef(function AttendanceSheet(
   { tutorData, classInfo, range, sheetNo = 1, rowsPerPage = 10, payments, canEditPayments = false, onUpdatePaymentStatus }: AttendanceSheetProps,
   ref: React.Ref<{ exportPdf: () => Promise<void> }>
@@ -349,7 +362,7 @@ const AttendanceSheet = forwardRef(function AttendanceSheet(
                       <TableCell align="center">{r.status ?? ''}</TableCell>
                       <TableCell align="center">{r.duration ? r.duration * 60 : ''}</TableCell>
                       <TableCell sx={{ px: 2 }}>{r.topicsCovered ?? ''}</TableCell>
-                      <TableCell align="center">{r.markedAt ? r.markedAt.replace('T', ' ').slice(0, 16) : ''}</TableCell>
+                      <TableCell align="center">{formatMarkedAt(r.markedAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
