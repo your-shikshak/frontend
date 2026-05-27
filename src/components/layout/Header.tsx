@@ -166,7 +166,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showSidebarMenu = true }) 
         <Box display="flex" alignItems="center" gap={{ xs: 1, sm: 2 }}>
           <Tooltip title="Notifications" arrow>
             <IconButton
-              onClick={() => setNotifOpen(true)}
+              onClick={() => setNotifOpen((prev) => !prev)}
               size="small"
               sx={{
                 borderRadius: 2,

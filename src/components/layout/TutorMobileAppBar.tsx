@@ -123,7 +123,7 @@ const TutorMobileAppBar: React.FC<TutorMobileAppBarProps> = ({ onMenuClick }) =>
         <Box display="flex" alignItems="center" gap={1}>
           <IconButton
             color="inherit"
-            onClick={() => setNotifOpen(true)}
+            onClick={() => setNotifOpen((prev) => !prev)}
             size="small"
             sx={{
               p: 1,

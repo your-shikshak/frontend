@@ -46,7 +46,12 @@ export default function NotificationsPanel({ open, onClose }: Props) {
   };
 
   return (
-    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: 380 } }}>
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      PaperProps={{ sx: { width: { xs: '86vw', sm: 380 } } }}
+    >
       <Box display="flex" alignItems="center" justifyContent="space-between" px={2} py={1.5}>
         <Box display="flex" alignItems="center" gap={1}>
           <Typography variant="h6">Notifications</Typography>
