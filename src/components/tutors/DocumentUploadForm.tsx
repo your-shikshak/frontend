@@ -45,7 +45,7 @@ export default function DocumentUploadForm({ tutorId, onUploadSuccess, loading =
 
   return (
     <Box display="flex" flexDirection="column" gap={2}>
-      <Alert severity="info">Supported formats: PDF, JPEG, PNG. Max size: 5MB.</Alert>
+      <Alert severity="info">Supported formats: PDF, JPEG, PNG. Max size: 1MB.</Alert>
       <TextField
         select
         label="Document Type"

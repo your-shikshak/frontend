@@ -801,7 +801,7 @@ const ManagerProfilePage: React.FC = () => {
                 {profilePhotoUrl ? 'Upload New Photo' : 'Upload Profile Photo'}
               </Typography>
               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-                Supported formats: JPEG, PNG (Max 5MB)
+                Supported formats: JPEG, PNG (Max 1MB)
               </Typography>
               <label htmlFor="profile-photo-input" style={{ display: 'block' }}>
                 <input
