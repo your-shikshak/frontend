@@ -143,7 +143,7 @@ const TutorProfilePage: React.FC = () => {
               getFinalClasses(1, 100, { tutorId: userId }),
               getPayments({ page: 1, limit: 50, tutorId: userId }),
               getAttendances({ page: 1, limit: 200, tutorId: userId }),
-              getTutorStats(routeId)
+              getTutorStats(tutor.id)
             ]);
 
             setAdminClasses(Array.isArray((classesRes as any).data) ? (classesRes as any).data : []);
