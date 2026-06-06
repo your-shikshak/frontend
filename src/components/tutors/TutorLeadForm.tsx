@@ -47,8 +47,17 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
     if (mode === 'create') return false;
     if (initialData?.verificationStatus !== 'VERIFIED') return false;
 
-    const lockedFields = ['fullName', 'phoneNumber', 'permanentAddress', 'residentialAddress', 'email', 'phone'];
-    return lockedFields.includes(fieldName);
+    const allowedFields = [
+      'city',
+      'preferredAreas',
+      'preferredMode',
+      'subjects',
+      'bio',
+      'languagesKnown',
+      'skills',
+      'alternatePhone'
+    ];
+    return !allowedFields.includes(fieldName);
   };
   const theme = useTheme();
   const [formData, setFormData] = useState<TutorLeadFormData>(initialData || {
@@ -284,8 +293,8 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
                   value={formData.alternatePhone || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, alternatePhone: e.target.value.replace(/\D/g, '') }))}
                   inputProps={{ maxLength: 10 }}
-                  helperText={isFieldReadOnly('phoneNumber') ? "Verified phone number cannot be changed" : 'Optional secondary contact'}
-                  disabled={isFieldReadOnly('phoneNumber')}
+                  helperText={isFieldReadOnly('alternatePhone') ? "Cannot be changed" : 'Optional secondary contact'}
+                  disabled={isFieldReadOnly('alternatePhone')}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">

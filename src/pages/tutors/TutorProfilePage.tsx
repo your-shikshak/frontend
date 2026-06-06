@@ -12,6 +12,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import SchoolIcon from '@mui/icons-material/School';
 import LaunchIcon from '@mui/icons-material/Launch';
+import EditIcon from '@mui/icons-material/Edit';
 import { BarChart2 } from 'lucide-react';
 import ChangePasswordOtpModal from '../../components/common/ChangePasswordOtpModal';
 import TutorTierProgressCard from '../../components/tutors/TutorTierProgressCard';
@@ -473,6 +474,34 @@ const TutorProfilePage: React.FC = () => {
                   }}
                 >
                   Change Password
+                </Button>
+              )}
+              {!id && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                  onClick={() => window.location.href = '/tutor-register?mode=edit'}
+                  sx={{
+                    borderRadius: 1.5,
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.75rem',
+                    fontFamily: "'Manrope', sans-serif",
+                    borderColor: alpha('#1e293b', 0.15),
+                    color: '#475569',
+                    bgcolor: 'rgba(255, 255, 255, 0.5)',
+                    backdropFilter: 'blur(8px)',
+                    px: 2.5,
+                    '&:hover': {
+                      borderColor: alpha('#1e293b', 0.3),
+                      bgcolor: 'rgba(255, 255, 255, 0.8)',
+                      transform: 'translateY(-1px)',
+                    },
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                >
+                  Edit Profile
                 </Button>
               )}
               {tutorProfile?.teacherId && (
