@@ -23,6 +23,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import AccountBoxIcon from '@mui/icons-material/AccountBox';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FolderIcon from '@mui/icons-material/Folder';
 import EventIcon from '@mui/icons-material/Event';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -102,6 +103,8 @@ const iconForLabel = (label: string) => {
       return <SummarizeIcon />;
     case 'Tutor Performance':
       return <InsightsIcon />;
+    case 'Shift Requests':
+      return <SwapHorizIcon />;
     case 'Payment Tracking':
       return <AccountBalanceWalletIcon />;
     case 'Notes':
