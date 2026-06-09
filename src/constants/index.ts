@@ -178,6 +178,7 @@ export const NAVIGATION_ITEMS = [
   { label: 'Notes', path: '/parent-notes', allowedRoles: [USER_ROLES.PARENT], description: 'View notes shared by tutors' },
   { label: 'My Classes', path: '/assigned-classes', allowedRoles: [USER_ROLES.COORDINATOR], description: 'View classes assigned to you' },
   { label: 'Sheet Approvals', path: '/attendance-sheet-approvals', allowedRoles: [USER_ROLES.COORDINATOR, USER_ROLES.ADMIN], description: 'Review and approve/reject class attendance sheets' },
+  { label: 'Shift Requests', path: '/shift-requests', allowedRoles: [USER_ROLES.COORDINATOR, USER_ROLES.ADMIN], description: 'Approve or reject tutor reschedule requests' },
   { label: 'Test Scheduling', path: '/test-scheduling', allowedRoles: [USER_ROLES.COORDINATOR], description: 'Schedule upcoming tests for classes' },
   { label: 'Announcements', path: '/announcements', allowedRoles: [USER_ROLES.COORDINATOR], description: 'View and post announcements' },
   { label: 'Test Reports', path: '/test-reports', allowedRoles: [USER_ROLES.COORDINATOR], description: 'Access detailed test performance reports' },
