@@ -60,6 +60,15 @@ export const tutorLeadAuthAPI = {
   },
 };
 
+export const registrationOtpAPI = {
+  async send(email: string): Promise<void> {
+    await api.post('/api/auth/email-otp/send', { email });
+  },
+  async verify(email: string, otp: string): Promise<void> {
+    await api.post('/api/auth/email-otp/verify', { email, otp });
+  },
+};
+
 export const tutorLeadAPI = {
   async create(payload: any): Promise<any> {
     const toSend = { ...(payload || {}) };

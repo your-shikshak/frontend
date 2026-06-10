@@ -19,7 +19,16 @@ import {
   InputAdornment,
   Checkbox,
   ListItemText,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import { registrationOtpAPI } from '@/api/client';
+import { toast } from 'sonner';
 import PersonIcon from '@mui/icons-material/Person';
 import PhoneIcon from '@mui/icons-material/Phone';
 import SchoolIcon from '@mui/icons-material/School';
@@ -95,6 +104,48 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Email OTP
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpValue, setOtpValue] = useState('');
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpError, setOtpError] = useState('');
+
+  const handleSendOtp = async () => {
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setErrors((prev) => ({ ...prev, email: 'Enter a valid email first' }));
+      return;
+    }
+    setOtpSending(true);
+    setOtpError('');
+    try {
+      await registrationOtpAPI.send(formData.email);
+      setOtpValue('');
+      setOtpDialogOpen(true);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to send OTP');
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpValue.length !== 6) { setOtpError('Enter the 6-digit OTP'); return; }
+    setOtpVerifying(true);
+    setOtpError('');
+    try {
+      await registrationOtpAPI.verify(formData.email, otpValue);
+      setEmailVerified(true);
+      setOtpDialogOpen(false);
+      toast.success('Email verified!');
+    } catch (err: any) {
+      setOtpError(err?.response?.data?.message || 'Invalid or expired OTP');
+    } finally {
+      setOtpVerifying(false);
+    }
+  };
+
   const handleSubjectsChange = (newSubjectIds: string[]) => {
     setFormData(prev => ({ ...prev, subjects: newSubjectIds }));
   };
@@ -125,6 +176,8 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
       newErrors.email = 'Email is required';
     } else if (!validateEmail(formData.email)) {
       newErrors.email = 'Invalid email format';
+    } else if (mode === 'create' && !emailVerified) {
+      newErrors.email = 'Please verify your email before submitting';
     }
 
     if (!formData.qualification.trim()) newErrors.qualification = 'Qualification is required';
@@ -203,6 +256,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
   );
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -311,7 +365,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
                   label="Email Address"
                   placeholder="john@example.com"
                   value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => { setFormData(prev => ({ ...prev, email: e.target.value })); setEmailVerified(false); }}
                   error={Boolean(errors.email)}
                   helperText={errors.email || (isFieldReadOnly('email') ? 'Cannot be changed' : '')}
                   disabled={isFieldReadOnly('email')}
@@ -321,9 +375,35 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
                         <EmailIcon color="action" fontSize="small" />
                       </InputAdornment>
                     ),
+                    endAdornment: emailVerified && mode === 'create' ? (
+                      <InputAdornment position="end">
+                        <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                      </InputAdornment>
+                    ) : undefined,
                     readOnly: isFieldReadOnly('email'),
                   }}
                 />
+                {mode === 'create' && !isFieldReadOnly('email') && (
+                  emailVerified ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                      <VerifiedIcon sx={{ color: 'success.main', fontSize: 16 }} />
+                      <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>
+                        Email Verified
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={handleSendOtp}
+                      disabled={otpSending}
+                      startIcon={otpSending ? <CircularProgress size={14} /> : undefined}
+                      sx={{ mt: 0.5, borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+                    >
+                      {otpSending ? 'Sending…' : 'Verify Email'}
+                    </Button>
+                  )
+                )}
               </Grid>
               <Grid item xs={12}>
                 <TextField
@@ -733,6 +813,48 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
         </CardContent>
       </Card>
     </motion.div>
+
+      {/* OTP Verification Dialog */}
+      <Dialog open={otpDialogOpen} onClose={() => setOtpDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Verify Your Email</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            We sent a 6-digit code to <strong>{formData.email}</strong>
+          </Typography>
+          <TextField
+            fullWidth
+            label="6-digit OTP"
+            value={otpValue}
+            onChange={(e) => { setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
+            inputProps={{ maxLength: 6, style: { letterSpacing: 8, fontSize: 22, textAlign: 'center' } }}
+            error={Boolean(otpError)}
+            helperText={otpError}
+            autoFocus
+          />
+          <Button
+            size="small"
+            variant="text"
+            onClick={handleSendOtp}
+            disabled={otpSending}
+            sx={{ mt: 1, textTransform: 'none', color: 'text.secondary' }}
+          >
+            {otpSending ? 'Sending…' : 'Resend OTP'}
+          </Button>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setOtpDialogOpen(false)} color="inherit">Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleVerifyOtp}
+            disabled={otpVerifying || otpValue.length !== 6}
+            startIcon={otpVerifying ? <CircularProgress size={16} color="inherit" /> : undefined}
+            sx={{ borderRadius: 2, fontWeight: 700 }}
+          >
+            {otpVerifying ? 'Verifying…' : 'Confirm OTP'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 
