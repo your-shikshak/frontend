@@ -16,6 +16,7 @@ export type GetLeadsQuery = {
   mode?: string;
   createdByName?: string;
   area?: string;
+  leadSource?: string;
 };
 
 export const getClassLeads = async (
@@ -35,6 +36,7 @@ export const getClassLeads = async (
   if (query.mode) params.append('mode', query.mode);
   if (query.createdByName) params.append('createdByName', query.createdByName);
   if (query.area) params.append('area', query.area);
+  if (query.leadSource) params.append('leadSource', query.leadSource);
   const url = `${API_ENDPOINTS.LEADS}?${params.toString()}`;
   const { data } = await api.get(url);
   return data as PaginatedResponse<IClassLead[]>;
