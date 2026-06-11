@@ -173,7 +173,10 @@ const TutorVerificationDetailsPage: React.FC = () => {
     const profilePhotoUrl = tutor.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl;
     const paymentProofUrl = tutor.verificationFeePaymentProof;
     const paymentDate = tutor.verificationFeePaymentDate ? new Date(tutor.verificationFeePaymentDate).toLocaleString() : undefined;
-    const paymentStatusLabel = tutor.verificationFeeStatus?.replace(/_/g, ' ') || 'PENDING';
+    const feeStatus = tutor.verificationFeeStatus; // null/undefined = not chosen
+    const paymentStatusLabel = feeStatus
+        ? feeStatus.replace(/_/g, ' ')
+        : 'NOT CHOSEN';
 
     return (
         <Box sx={{ height: 'calc(100vh - 64px)', bgcolor: '#f5f5f5', overflow: 'hidden' }}>
@@ -326,11 +329,11 @@ const TutorVerificationDetailsPage: React.FC = () => {
                                     <Typography variant="body2" sx={{ p: 1, color: 'text.secondary' }}>No documents uploaded</Typography>
                                 )}
                                 <Chip
-                                    label="Payment Status"
+                                    label={`Payment · ${paymentStatusLabel}`}
                                     onClick={() => setSelectedDocIndex(paymentTabIndex)}
                                     color={isPaymentTab ? 'primary' : 'default'}
                                     variant={isPaymentTab ? 'filled' : 'outlined'}
-                                    icon={tutor.verificationFeeStatus === 'PAID' ? <CheckCircleIcon /> : undefined}
+                                    icon={feeStatus === 'PAID' ? <CheckCircleIcon /> : undefined}
                                     clickable
                                 />
                             </Paper>
@@ -339,63 +342,88 @@ const TutorVerificationDetailsPage: React.FC = () => {
                             <Paper variant="outlined" sx={{ flexGrow: 1, m: 2, overflow: 'hidden', bgcolor: '#f5f5f5', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                                 {isPaymentTab ? (
                                     <Box sx={{ p: 3, flexGrow: 1, overflow: 'auto' }}>
-                                        <Box display="flex" alignItems="center" gap={1} mb={2}>
+                                        {/* Header */}
+                                        <Box display="flex" alignItems="center" gap={1.5} mb={3}>
                                             <Typography variant="h6" fontWeight={700}>Verification Fee</Typography>
                                             <Chip
                                                 size="small"
                                                 label={paymentStatusLabel}
-                                                color={tutor.verificationFeeStatus === 'PAID' ? 'success' : tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'warning' : 'default'}
+                                                color={
+                                                    feeStatus === 'PAID' ? 'success'
+                                                    : feeStatus === 'DEDUCT_FROM_FIRST_MONTH' ? 'warning'
+                                                    : 'default'
+                                                }
+                                                sx={{ fontWeight: 700 }}
                                             />
                                         </Box>
-                                        {tutor.verificationFeeStatus === 'DEDUCT_FROM_FIRST_MONTH' && (
-                                            <Alert severity="warning" sx={{ mb: 2 }}>
-                                                Tutor chose to deduct the verification fee from the first month payout.
+
+                                        {/* State 1: Not chosen */}
+                                        {!feeStatus && (
+                                            <Alert severity="info" sx={{ borderRadius: 2 }}>
+                                                <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                                                    Payment method not selected
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                    The tutor has not yet chosen how they want to pay the verification fee.
+                                                    They can either pay directly (and upload proof), or opt to have it
+                                                    deducted from their first lecture payout.
+                                                </Typography>
                                             </Alert>
                                         )}
-                                        {tutor.verificationFeeStatus === 'PAID' && !paymentProofUrl && (
-                                            <Alert severity="info" sx={{ mb: 2 }}>
-                                                Marked as paid, but no payment proof was uploaded.
+
+                                        {/* State 2: Deduct from first lecture */}
+                                        {feeStatus === 'DEDUCT_FROM_FIRST_MONTH' && (
+                                            <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                                                <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                                                    Deduct from 1st lecture payout
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                    This tutor chose to defer payment. The verification fee will be
+                                                    automatically deducted from their earnings after the first completed
+                                                    lecture. No upfront payment or screenshot is required.
+                                                </Typography>
                                             </Alert>
                                         )}
-                                        {paymentDate && (
-                                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                                Payment date: {paymentDate}
-                                            </Typography>
-                                        )}
-                                        {paymentProofUrl ? (
-                                            <Box sx={{ position: 'relative', height: '100%', minHeight: 360 }}>
-                                                <Box sx={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: 1, zIndex: 10 }}>
-                                                    <Button
-                                                        variant="contained"
-                                                        size="small"
-                                                        startIcon={<Eye size={16} />}
-                                                        onClick={() => setViewerOpen(true)}
+
+                                        {/* State 3: Paid */}
+                                        {feeStatus === 'PAID' && (
+                                            <>
+                                                {paymentDate && (
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                        Payment recorded on: <strong>{paymentDate}</strong>
+                                                    </Typography>
+                                                )}
+                                                {!paymentProofUrl ? (
+                                                    <Alert severity="info" sx={{ borderRadius: 2 }}>
+                                                        Marked as paid, but no payment screenshot was uploaded.
+                                                    </Alert>
+                                                ) : (
+                                                    <Box
                                                         sx={{
-                                                            borderRadius: '8px',
-                                                            textTransform: 'none',
-                                                            fontWeight: 600,
-                                                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                                                            bgcolor: 'white',
-                                                            color: 'text.primary',
-                                                            '&:hover': { bgcolor: '#f5f5f5' }
+                                                            width: '100%',
+                                                            borderRadius: 2,
+                                                            overflow: 'hidden',
+                                                            border: '1px solid',
+                                                            borderColor: 'divider',
+                                                            bgcolor: '#fff',
                                                         }}
                                                     >
-                                                        Full View
-                                                    </Button>
-                                                    <Button
-                                                        variant="outlined"
-                                                        size="small"
-                                                        onClick={() => window.open(paymentProofUrl, '_blank')}
-                                                    >
-                                                        Open in New Tab
-                                                    </Button>
-                                                </Box>
-                                                <Box sx={{ height: '100%', minHeight: 360, pt: 4 }}>
-                                                    {getDocumentComponent(paymentProofUrl)}
-                                                </Box>
-                                            </Box>
-                                        ) : (
-                                            <Typography color="text.secondary">No payment proof available.</Typography>
+                                                        <img
+                                                            src={paymentProofUrl}
+                                                            alt="Payment Proof"
+                                                            style={{
+                                                                width: '100%',
+                                                                height: 'auto',
+                                                                display: 'block',
+                                                                objectFit: 'contain',
+                                                            }}
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                )}
+                                            </>
                                         )}
                                     </Box>
                                 ) : selectedDocument ? (
@@ -471,7 +499,7 @@ const TutorVerificationDetailsPage: React.FC = () => {
             <DocumentViewerModal
                 open={viewerOpen}
                 onClose={() => setViewerOpen(false)}
-                document={isPaymentTab && paymentProofUrl ? { documentType: 'PAYMENT_PROOF', documentUrl: paymentProofUrl, uploadedAt: new Date() } : selectedDocument || null}
+                document={isPaymentTab && paymentProofUrl ? { documentType: 'PAYMENT_PROOF', documentUrl: paymentProofUrl, uploadedAt: new Date() } : (selectedDocument || null)}
             />
         </Box>
     );

@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Container, Box, Typography, Tabs, Tab, Dialog, DialogContent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, TablePagination, TextField, TableSortLabel, MenuItem, Select, InputAdornment, IconButton, Link as MuiLink, Avatar, Card, CardContent, Stack, useMediaQuery, Autocomplete } from '@mui/material';
+import {
+  Container, Box, Typography, Tabs, Tab, Dialog, DialogContent, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, Paper, Button, TablePagination,
+  TextField, TableSortLabel, MenuItem, Select, InputAdornment, IconButton,
+  Link as MuiLink, Avatar, Card, CardContent, Stack, useMediaQuery, Autocomplete, Chip,
+} from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import ClearIcon from '@mui/icons-material/Clear';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
+import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import SnackbarNotification from '../../components/common/SnackbarNotification';
@@ -14,14 +24,78 @@ import { useOptions } from '../../hooks/useOptions';
 import { ITutor, IDocument } from '../../types';
 import {
   getPendingVerifications, updateVerificationStatus, getSubjects, getVerifiers,
-  getCities,
-  getAreas,
-  getTutors,
+  getCities, getAreas, getTutors,
 } from '../../services/tutorService';
-import { useTheme } from '@mui/material/styles';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
-import { getLeafSubjectLabel, getOptionLabel, getLeafSubjectList } from '../../utils/subjectUtils';
+import { getOptionLabel, getLeafSubjectList } from '../../utils/subjectUtils';
 
+// ─── KPI stat card ────────────────────────────────────────────────────────────
+function StatCard({
+  icon, label, value, accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  accent: string;
+}) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        px: { xs: 1.5, sm: 2 },
+        py: 1.5,
+        borderRadius: 2,
+        bgcolor: alpha(accent, 0.08),
+        border: `1px solid ${alpha(accent, 0.18)}`,
+        flex: 1,
+        minWidth: 0,
+        transition: 'background 200ms ease-out',
+        '&:hover': { bgcolor: alpha(accent, 0.13) },
+      }}
+    >
+      <Box sx={{ color: accent, display: 'flex', flexShrink: 0, opacity: 0.85 }}>{icon}</Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          sx={{
+            fontSize: { xs: '1.35rem', sm: '1.6rem' },
+            fontWeight: 800,
+            lineHeight: 1,
+            color: '#FFFFFF',
+            letterSpacing: '-0.03em',
+          }}
+        >
+          {value}
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 600,
+            color: alpha('#FFFFFF', 0.55),
+            mt: 0.25,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {label}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
+// ─── Shared sort-label sx ─────────────────────────────────────────────────────
+const sortLabelSx = {
+  '&.MuiTableSortLabel-root': { color: 'inherit' },
+  '&.MuiTableSortLabel-root:hover': { color: 'inherit' },
+  '&.Mui-active': { color: 'inherit', '& .MuiTableSortLabel-icon': { color: 'inherit !important' } },
+};
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function TutorVerificationPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -34,33 +108,25 @@ export default function TutorVerificationPage() {
   const [docsOpen, setDocsOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<IDocument | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [confirmConfig, setConfirmConfig] = useState<{ open: boolean; title: string; message: string; action: () => void; severity: 'info' | 'error' | 'warning' }>({ open: false, title: '', message: '', action: () => { }, severity: 'info' });
+  const [confirmConfig, setConfirmConfig] = useState<{
+    open: boolean; title: string; message: string; action: () => void;
+    severity: 'info' | 'error' | 'warning';
+  }>({ open: false, title: '', message: '', action: () => {}, severity: 'info' });
   const [actionLoading, setActionLoading] = useState(false);
-  const [snack, setSnack] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'success' });
+  const [snack, setSnack] = useState<{
+    open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning';
+  }>({ open: false, message: '', severity: 'success' });
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const [filters, setFilters] = useState({
-    teacherId: '',
-    name: '',
-    email: '',
-    phone: '',
-    preferredMode: '',
-    status: '',
-    verifier: '',
-    subjects: '',
-    city: '',
-    area: '',
-    grade: '',
-    board: ''
+    teacherId: '', name: '', email: '', phone: '', preferredMode: '',
+    status: '', verifier: '', subjects: '', city: '', area: '', grade: '', board: '',
   });
-
   const [sort, setSort] = useState<{ sortBy: string; sortOrder: 'asc' | 'desc' }>({
-    sortBy: 'createdAt',
-    sortOrder: 'desc'
+    sortBy: 'createdAt', sortOrder: 'desc',
   });
-
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
   const [verifiersList, setVerifiersList] = useState<{ _id: string; name: string }[]>([]);
@@ -74,7 +140,7 @@ export default function TutorVerificationPage() {
     if (!subjects || subjects.length === 0) return '-';
     const leafSubjects = getLeafSubjectList(subjects);
     if (limit && leafSubjects.length > limit) {
-      return leafSubjects.slice(0, limit).join(', ') + '...';
+      return leafSubjects.slice(0, limit).join(', ') + '…';
     }
     return leafSubjects.join(', ');
   };
@@ -84,7 +150,6 @@ export default function TutorVerificationPage() {
     const name = t.user?.name || 'Unknown Tutor';
     const email = t.user?.email || '-';
     const phone = t.user?.phone || '-';
-    const locations = (t.preferredLocations || []).join(', ');
 
     return (
       <Card
@@ -93,11 +158,19 @@ export default function TutorVerificationPage() {
         sx={{
           borderRadius: 2,
           borderColor: 'divider',
+          transition: 'box-shadow 180ms ease-out, border-color 180ms ease-out',
+          '&:hover': {
+            borderColor: 'primary.main',
+            boxShadow: `0 2px 12px ${alpha(theme.palette.primary.main, 0.12)}`,
+          },
         }}
       >
-        <CardContent sx={{ pb: 2 }}>
+        <CardContent sx={{ pb: '16px !important' }}>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <Avatar src={t.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl} sx={{ width: 44, height: 44 }}>
+            <Avatar
+              src={t.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl}
+              sx={{ width: 44, height: 44, fontSize: '1rem', fontWeight: 700 }}
+            >
               {(name || 'T').charAt(0).toUpperCase()}
             </Avatar>
             <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -105,13 +178,9 @@ export default function TutorVerificationPage() {
                 component={RouterLink}
                 to={`/tutor-profile/${id}`}
                 sx={{
-                  color: 'primary.main',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                  display: 'block',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  color: 'primary.main', fontWeight: 700, textDecoration: 'none',
+                  display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  '&:hover': { textDecoration: 'underline' },
                 }}
               >
                 {name}
@@ -128,41 +197,43 @@ export default function TutorVerificationPage() {
             <Typography variant="body2" color="text.secondary">{phone}</Typography>
           </Box>
 
-          <Box sx={{ mt: 1.25 }}>
-            <Typography variant="body2">
-              <strong>Mode:</strong> {t.preferredMode || '-'}
-            </Typography>
-            <Typography variant="body2">
-              <strong>City:</strong> {t.user?.city || '-'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              <strong>Areas:</strong> {(t.preferredLocations || []).filter(l => l !== t.user?.city).join(', ') || '-'}
+          <Box sx={{ mt: 1.25, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5 }}>
+            <Typography variant="body2"><strong>Mode:</strong> {t.preferredMode || '-'}</Typography>
+            <Typography variant="body2"><strong>City:</strong> {t.user?.city || '-'}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ gridColumn: '1 / -1' }}>
+              <strong>Areas:</strong>{' '}
+              {(t.preferredLocations || []).filter(l => l !== t.user?.city).join(', ') || '-'}
             </Typography>
           </Box>
 
           <Box sx={{ mt: 1.25 }}>
             <Typography variant="body2">
-              <strong>Stats:</strong> {t.classesAssigned} Classes, {t.demosApproved} Demos
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Exp:</strong> {t.experienceHours} hrs
+              <strong>Stats:</strong> {t.classesAssigned} Classes · {t.demosApproved} Demos · {t.experienceHours} hrs
             </Typography>
           </Box>
-          <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+
+          <Typography
+            variant="body2"
+            sx={{
+              mt: 0.75, overflow: 'hidden', textOverflow: 'ellipsis',
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+            }}
+          >
             <strong>Subjects:</strong> {formatSubjectDisplay(t.subjects)}
           </Typography>
 
-          <Stack spacing={1} sx={{ mt: 2 }}>
-            <Button
-              fullWidth
-              size="small"
-              variant="contained"
-              component={RouterLink}
-              to={mode === 'pending' ? `/tutors/verify/${id}` : `/tutors/verify/${id}`}
-            >
-              {mode === 'pending' ? 'Details' : 'View'}
-            </Button>
-          </Stack>
+          <Button
+            fullWidth size="small" variant="contained"
+            component={RouterLink}
+            to={`/tutors/verify/${id}`}
+            sx={{
+              mt: 2, borderRadius: 1.5, fontWeight: 600,
+              transition: 'transform 160ms ease-out, box-shadow 160ms ease-out',
+              '&:active': { transform: 'scale(0.97)' },
+            }}
+          >
+            {mode === 'pending' ? 'Review' : 'View'}
+          </Button>
         </CardContent>
       </Card>
     );
@@ -174,22 +245,17 @@ export default function TutorVerificationPage() {
         const res = await getSubjects();
         if (res.data) {
           setSubjectsList(res.data);
-          // Update cache but we bypass it for now to ensure fresh data
           localStorage.setItem('tutor_subjects_cache', JSON.stringify(res.data));
           localStorage.setItem('tutor_subjects_ts', String(Date.now()));
         }
-      } catch (e) {
-        console.error("Failed to fetch subjects", e);
-      }
+      } catch (e) { console.error('Failed to fetch subjects', e); }
     };
 
     const fetchVerifiers = async () => {
-      // Check cache first
       const cached = localStorage.getItem('tutor_verifiers_cache');
       const cacheTimestamp = localStorage.getItem('tutor_verifiers_ts');
-
       const now = Date.now();
-      if (cached && cacheTimestamp && (now - parseInt(cacheTimestamp) < 24 * 60 * 60 * 1000)) {
+      if (cached && cacheTimestamp && now - parseInt(cacheTimestamp) < 24 * 60 * 60 * 1000) {
         setVerifiersList(JSON.parse(cached));
       } else {
         try {
@@ -199,19 +265,15 @@ export default function TutorVerificationPage() {
             localStorage.setItem('tutor_verifiers_cache', JSON.stringify(res.data));
             localStorage.setItem('tutor_verifiers_ts', String(now));
           }
-        } catch (e) {
-          console.error("Failed to fetch verifiers", e);
-        }
+        } catch (e) { console.error('Failed to fetch verifiers', e); }
       }
     };
 
     const fetchCities = async () => {
-      // Check cache first
       const cached = localStorage.getItem('tutor_cities_cache');
       const cacheTimestamp = localStorage.getItem('tutor_cities_ts');
-
       const now = Date.now();
-      if (cached && cacheTimestamp && (now - parseInt(cacheTimestamp) < 24 * 60 * 60 * 1000)) {
+      if (cached && cacheTimestamp && now - parseInt(cacheTimestamp) < 24 * 60 * 60 * 1000) {
         setCitiesList(JSON.parse(cached));
       } else {
         try {
@@ -221,19 +283,15 @@ export default function TutorVerificationPage() {
             localStorage.setItem('tutor_cities_cache', JSON.stringify(res.data));
             localStorage.setItem('tutor_cities_ts', String(now));
           }
-        } catch (e) {
-          console.error("Failed to fetch cities", e);
-        }
+        } catch (e) { console.error('Failed to fetch cities', e); }
       }
     };
 
     const fetchAreas = async () => {
-      // Check cache first
       const cached = localStorage.getItem('tutor_areas_cache');
       const cacheTimestamp = localStorage.getItem('tutor_areas_ts');
-
       const now = Date.now();
-      if (cached && cacheTimestamp && (now - parseInt(cacheTimestamp) < 24 * 60 * 60 * 1000)) {
+      if (cached && cacheTimestamp && now - parseInt(cacheTimestamp) < 24 * 60 * 60 * 1000) {
         setAreasList(JSON.parse(cached));
       } else {
         try {
@@ -243,9 +301,7 @@ export default function TutorVerificationPage() {
             localStorage.setItem('tutor_areas_cache', JSON.stringify(res.data));
             localStorage.setItem('tutor_areas_ts', String(now));
           }
-        } catch (e) {
-          console.error("Failed to fetch areas", e);
-        }
+        } catch (e) { console.error('Failed to fetch areas', e); }
       }
     };
 
@@ -272,6 +328,7 @@ export default function TutorVerificationPage() {
     fetchAreas();
     fetchKpis();
   }, []);
+
   const { tutors, loading: loadingTutors, error: tutorsError, pagination, refetch } = useTutors({
     page: page + 1,
     limit: rowsPerPage,
@@ -287,26 +344,24 @@ export default function TutorVerificationPage() {
     area: debouncedFilters.area,
     grade: debouncedFilters.grade,
     board: debouncedFilters.board,
-    subjects: debouncedFilters.subjects ? [debouncedFilters.subjects] : undefined
+    subjects: debouncedFilters.subjects ? [debouncedFilters.subjects] : undefined,
   });
 
-  // Use Options hook for dropdowns
   const { options: cityOptions } = useOptions('CITY');
-
-  // Find selected city ID to fetch areas
-  const selectedCityValue = filters.city;
-  const selectedCityOption = cityOptions.find(o => (o as any).label === selectedCityValue);
-  const { options: areaOptions } = useOptions(selectedCityOption?.value ? `AREA_${selectedCityOption.value}` : 'NONE', selectedCityOption?._id);
+  const selectedCityOption = cityOptions.find(o => (o as any).label === filters.city);
+  const { options: areaOptions } = useOptions(
+    selectedCityOption?.value ? `AREA_${selectedCityOption.value}` : 'NONE',
+    selectedCityOption?._id,
+  );
   const { options: boardOptions } = useOptions('BOARD');
-  // Find selected board ID to fetch classes (grades)
-  const selectedBoardValue = filters.board;
-  const selectedBoardOption = boardOptions.find(o => (o as any).label === selectedBoardValue);
-  const { options: gradeOptions } = useOptions(selectedBoardOption?.value ? `GRADE_${selectedBoardOption.value}` : 'GRADE', selectedBoardOption?._id);
+  const selectedBoardOption = boardOptions.find(o => (o as any).label === filters.board);
+  const { options: gradeOptions } = useOptions(
+    selectedBoardOption?.value ? `GRADE_${selectedBoardOption.value}` : 'GRADE',
+    selectedBoardOption?._id,
+  );
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedFilters(filters);
-    }, 500);
+    const timer = setTimeout(() => setDebouncedFilters(filters), 500);
     return () => clearTimeout(timer);
   }, [filters]);
 
@@ -314,23 +369,14 @@ export default function TutorVerificationPage() {
     setFilters(prev => ({ ...prev, [field]: value }));
     setPage(0);
   };
-
-  const clearFilter = (field: string) => {
-    handleFilterChange(field, '');
-  };
+  const clearFilter = (field: string) => handleFilterChange(field, '');
 
   const handleSort = (columnId: string) => {
     const isAsc = sort.sortBy === columnId && sort.sortOrder === 'asc';
-    setSort({
-      sortBy: columnId,
-      sortOrder: isAsc ? 'desc' : 'asc'
-    });
+    setSort({ sortBy: columnId, sortOrder: isAsc ? 'desc' : 'asc' });
   };
 
-  const handleChangePage = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
+  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
@@ -356,13 +402,10 @@ export default function TutorVerificationPage() {
     setViewerOpen(true);
   };
 
-  // Unused handlers removed
-  // const handleViewDocs = (t: ITutor) => { ... }
-  // const handleReview = (t: ITutor) => { ... }
-
-  const handleVerifySubmit = (payload: { status: string; verificationNotes?: string; whatsappCommunityJoined?: boolean }) => {
+  const handleVerifySubmit = (payload: {
+    status: string; verificationNotes?: string; whatsappCommunityJoined?: boolean;
+  }) => {
     if (!selectedTutor) return;
-
     setConfirmConfig({
       open: true,
       title: payload.status === 'VERIFIED' ? 'Approve Tutor' : 'Reject Tutor',
@@ -371,7 +414,10 @@ export default function TutorVerificationPage() {
       action: async () => {
         try {
           setActionLoading(true);
-          await updateVerificationStatus(selectedTutor.id, payload.status, payload.verificationNotes, payload.whatsappCommunityJoined);
+          await updateVerificationStatus(
+            selectedTutor.id, payload.status, payload.verificationNotes,
+            payload.whatsappCommunityJoined,
+          );
           setSnack({ open: true, message: 'Verification updated', severity: 'success' });
           setVerifyOpen(false);
           setSelectedTutor(null);
@@ -383,90 +429,159 @@ export default function TutorVerificationPage() {
         } finally {
           setActionLoading(false);
         }
-      }
+      },
     });
   };
 
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
-      {/* Hero Section */}
+
+      {/* ── Header ── */}
       <Box
         sx={{
-          background: 'linear-gradient(135deg, #4A148C 0%, #311B92 100%)', // Deep Purple theme
-          color: 'white',
-          py: { xs: 4, md: 5 },
-          px: { xs: 2, md: 4 },
-          borderRadius: { xs: 0, md: 3 },
-          mb: 4,
-          position: 'relative',
+          bgcolor: '#0F172A',
+          color: '#fff',
+          px: { xs: 2.5, md: 4 },
+          pt: { xs: 3, md: 3.5 },
+          pb: 0,
+          borderRadius: { xs: 2, md: 2.5 },
+          mb: 3,
           overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
         }}
       >
-        <Box sx={{ position: 'relative', zIndex: 1, mb: 3 }}>
-          <Typography variant="h4" fontWeight={800} gutterBottom>
-            Tutor Management
-          </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.9, maxWidth: 600 }}>
-            Oversee tutor verifications, track performance stats, and manage tutor profiles.
-          </Typography>
+        {/* Title row */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            justifyContent: 'space-between',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1,
+            mb: 3,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontSize: { xs: '1.35rem', md: '1.6rem' },
+                fontWeight: 800,
+                color: '#F8FAFC',
+                lineHeight: 1.1,
+                letterSpacing: '-0.025em',
+              }}
+            >
+              Tutor Management
+            </Typography>
+            <Typography
+              sx={{
+                fontSize: '0.8125rem',
+                color: alpha('#fff', 0.5),
+                mt: 0.5,
+              }}
+            >
+              Verify tutors, track performance, manage profiles
+            </Typography>
+          </Box>
+
+          {/* Active filters pill */}
+          {Object.values(filters).some(Boolean) && (
+            <Chip
+              label="Filters active"
+              size="small"
+              onDelete={() => setFilters({
+                teacherId: '', name: '', email: '', phone: '', preferredMode: '',
+                status: '', verifier: '', subjects: '', city: '', area: '', grade: '', board: '',
+              })}
+              sx={{
+                bgcolor: alpha('#6366F1', 0.25),
+                color: '#A5B4FC',
+                borderColor: alpha('#6366F1', 0.4),
+                border: '1px solid',
+                '& .MuiChip-deleteIcon': { color: '#A5B4FC' },
+                fontWeight: 600,
+                fontSize: '0.7rem',
+              }}
+            />
+          )}
         </Box>
 
-        {/* KPI Cards */}
-        <Box sx={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
-          {[
-            { label: 'Total Tutors', value: kpis.total, color: '#CE93D8', bg: 'rgba(255,255,255,0.1)' },
-            { label: 'Verified', value: kpis.verified, color: '#A5D6A7', bg: 'rgba(165,214,167,0.15)' },
-            { label: 'Under Review', value: kpis.underReview, color: '#FFF59D', bg: 'rgba(255,245,157,0.15)' },
-            { label: 'Pending / Rejected', value: pending.length + kpis.rejected, color: '#EF9A9A', bg: 'rgba(239,154,154,0.15)' },
-          ].map((kpi) => (
-            <Box key={kpi.label} sx={{ px: 2, py: 1.5, borderRadius: 2, bgcolor: kpi.bg, border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)' }}>
-              <Typography variant="h5" fontWeight={800} sx={{ color: kpi.color, lineHeight: 1 }}>{kpi.value}</Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600, mt: 0.5, display: 'block' }}>{kpi.label}</Typography>
-            </Box>
-          ))}
+        {/* KPI strip */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
+            gap: { xs: 1, sm: 1.5 },
+            mb: 3,
+          }}
+        >
+          <StatCard icon={<PeopleAltOutlinedIcon fontSize="small" />} label="Total Tutors" value={kpis.total} accent="#818CF8" />
+          <StatCard icon={<VerifiedOutlinedIcon fontSize="small" />} label="Verified" value={kpis.verified} accent="#34D399" />
+          <StatCard icon={<HourglassEmptyOutlinedIcon fontSize="small" />} label="Under Review" value={kpis.underReview} accent="#FBBF24" />
+          <StatCard icon={<CancelOutlinedIcon fontSize="small" />} label="Pending / Rejected" value={pending.length + kpis.rejected} accent="#F87171" />
         </Box>
 
-        <Box sx={{ position: 'relative', zIndex: 1 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            variant={isMobile ? 'scrollable' : 'standard'}
-            allowScrollButtonsMobile
-            sx={{
-              '& .MuiTab-root': { color: 'rgba(255,255,255,0.7)', fontWeight: 600 },
-              '& .Mui-selected': { color: '#fff !important' },
-              '& .MuiTabs-indicator': { backgroundColor: '#fff', height: 4 }
-            }}
-          >
-            <Tab label={`Pending Verifications (${pending.length})`} />
-            <Tab label="All Tutors" />
-          </Tabs>
-        </Box>
-
-        {/* Abstract shapes */}
-        <Box sx={{
-          position: 'absolute',
-          top: -30,
-          right: -30,
-          width: 250,
-          height: 250,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-        }} />
-        <Box sx={{
-          position: 'absolute',
-          bottom: -50,
-          left: 100,
-          width: 350,
-          height: 350,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)',
-        }} />
+        {/* Tab bar — sits flush at the bottom of the header */}
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          variant={isMobile ? 'scrollable' : 'standard'}
+          allowScrollButtonsMobile
+          sx={{
+            minHeight: 44,
+            '& .MuiTab-root': {
+              color: alpha('#fff', 0.5),
+              fontWeight: 600,
+              fontSize: '0.8125rem',
+              minHeight: 44,
+              textTransform: 'none',
+              letterSpacing: 0,
+              transition: 'color 180ms ease-out',
+              '&:hover': { color: alpha('#fff', 0.85) },
+            },
+            '& .Mui-selected': { color: '#fff !important' },
+            '& .MuiTabs-indicator': {
+              backgroundColor: '#6366F1',
+              height: 3,
+              borderRadius: '3px 3px 0 0',
+            },
+          }}
+        >
+          <Tab
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                Pending Verifications
+                {pending.length > 0 && (
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: 20,
+                      height: 20,
+                      px: 0.75,
+                      borderRadius: 10,
+                      bgcolor: alpha('#F87171', 0.2),
+                      color: '#FCA5A5',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {pending.length}
+                  </Box>
+                )}
+              </Box>
+            }
+          />
+          <Tab label="All Tutors" />
+        </Tabs>
       </Box>
 
-      {isMobile ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+      {/* ── Mobile card list ── */}
+      {isMobile && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
           {tab === 0 ? (
             loading ? (
               <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', borderRadius: 2 }}>
@@ -477,11 +592,17 @@ export default function TutorVerificationPage() {
                 <ErrorAlert error={error} />
               </Paper>
             ) : pending.length === 0 ? (
-              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                <Typography>No tutors pending verification.</Typography>
+              <Paper
+                variant="outlined"
+                sx={{ p: 4, borderRadius: 2, textAlign: 'center', borderStyle: 'dashed' }}
+              >
+                <HourglassEmptyOutlinedIcon sx={{ fontSize: 32, color: 'text.disabled', mb: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  No tutors pending verification
+                </Typography>
               </Paper>
             ) : (
-              pending.map((t) => renderTutorCard(t, 'pending'))
+              pending.map(t => renderTutorCard(t, 'pending'))
             )
           ) : (
             loadingTutors ? (
@@ -490,213 +611,166 @@ export default function TutorVerificationPage() {
               </Paper>
             ) : (
               <>
-                {tutors.map((t) => renderTutorCard(t, 'all'))}
-                {tutorsError ? (
+                {tutors.map(t => renderTutorCard(t, 'all'))}
+                {tutorsError && (
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <ErrorAlert error={tutorsError} />
                   </Paper>
-                ) : null}
+                )}
               </>
             )
           )}
         </Box>
-      ) : (
+      )}
+
+      {/* ── Desktop table ── */}
+      {!isMobile && (
         <TableContainer
           component={Paper}
           elevation={0}
           sx={{
             width: '100%',
             overflowX: 'auto',
-            mb: 3,
+            mb: 2,
             borderRadius: 2,
             border: '1px solid',
             borderColor: 'divider',
           }}
         >
           <Table size="small" sx={{ minWidth: 1100 }}>
+            {/* Column headers */}
             <TableHead>
-              <TableRow sx={{ bgcolor: 'grey.100', '& .MuiTableCell-root': { color: 'text.primary', fontWeight: 700, borderBottom: '2px solid', borderColor: 'divider' } }}>
-                <TableCell sx={{ fontWeight: 700, width: 48 }}>#</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  <TableSortLabel
-                    active={sort.sortBy === 'teacherId'}
-                    direction={sort.sortBy === 'teacherId' ? sort.sortOrder : 'asc'}
-                    onClick={() => handleSort('teacherId')}
-                    sx={{
-                      '&.MuiTableSortLabel-root': { color: 'inherit' },
-                      '&.MuiTableSortLabel-root:hover': { color: 'inherit' },
-                      '&.Mui-active': { color: 'inherit', '& .MuiTableSortLabel-icon': { color: 'inherit !important' } },
-                    }}
-                  >
-                    ID
-                  </TableSortLabel>
+              <TableRow
+                sx={{
+                  bgcolor: '#F8FAFC',
+                  '& .MuiTableCell-root': {
+                    color: '#475569',
+                    fontWeight: 700,
+                    fontSize: '0.7rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    borderBottom: '2px solid',
+                    borderColor: 'divider',
+                    py: 1.25,
+                  },
+                }}
+              >
+                <TableCell sx={{ width: 44 }}>#</TableCell>
+                <TableCell>
+                  <TableSortLabel active={sort.sortBy === 'teacherId'} direction={sort.sortBy === 'teacherId' ? sort.sortOrder : 'asc'} onClick={() => handleSort('teacherId')} sx={sortLabelSx}>ID</TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  <TableSortLabel
-                    active={sort.sortBy === 'name'}
-                    direction={sort.sortBy === 'name' ? sort.sortOrder : 'asc'}
-                    onClick={() => handleSort('name')}
-                    sx={{
-                      '&.MuiTableSortLabel-root': { color: 'inherit' },
-                      '&.MuiTableSortLabel-root:hover': { color: 'inherit' },
-                      '&.Mui-active': { color: 'inherit', '& .MuiTableSortLabel-icon': { color: 'inherit !important' } },
-                    }}
-                  >
-                    Name
-                  </TableSortLabel>
+                <TableCell>
+                  <TableSortLabel active={sort.sortBy === 'name'} direction={sort.sortBy === 'name' ? sort.sortOrder : 'asc'} onClick={() => handleSort('name')} sx={sortLabelSx}>Name</TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Contact Info</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>City</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Area</TableCell>
-
-                <TableCell sx={{ fontWeight: 700 }}>Mode</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  <TableSortLabel
-                    active={sort.sortBy === 'classesAssigned'}
-                    direction={sort.sortBy === 'classesAssigned' ? sort.sortOrder : 'asc'}
-                    onClick={() => handleSort('classesAssigned')}
-                    sx={{
-                      '&.MuiTableSortLabel-root': { color: 'inherit' },
-                      '&.MuiTableSortLabel-root:hover': { color: 'inherit' },
-                      '&.Mui-active': { color: 'inherit', '& .MuiTableSortLabel-icon': { color: 'inherit !important' } },
-                    }}
-                  >
-                    Stats
-                  </TableSortLabel>
+                <TableCell>Contact</TableCell>
+                <TableCell>City</TableCell>
+                <TableCell>Area</TableCell>
+                <TableCell>Mode</TableCell>
+                <TableCell>
+                  <TableSortLabel active={sort.sortBy === 'classesAssigned'} direction={sort.sortBy === 'classesAssigned' ? sort.sortOrder : 'asc'} onClick={() => handleSort('classesAssigned')} sx={sortLabelSx}>Stats</TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  <TableSortLabel
-                    active={sort.sortBy === 'experienceHours'}
-                    direction={sort.sortBy === 'experienceHours' ? sort.sortOrder : 'asc'}
-                    onClick={() => handleSort('experienceHours')}
-                    sx={{
-                      '&.MuiTableSortLabel-root': { color: 'inherit' },
-                      '&.MuiTableSortLabel-root:hover': { color: 'inherit' },
-                      '&.Mui-active': { color: 'inherit', '& .MuiTableSortLabel-icon': { color: 'inherit !important' } },
-                    }}
-                  >
-                    Exp
-                  </TableSortLabel>
+                <TableCell>
+                  <TableSortLabel active={sort.sortBy === 'experienceHours'} direction={sort.sortBy === 'experienceHours' ? sort.sortOrder : 'asc'} onClick={() => handleSort('experienceHours')} sx={sortLabelSx}>Exp</TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Subjects</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Verifier</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
+                <TableCell>Subjects</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Verifier</TableCell>
+                <TableCell align="right">Action</TableCell>
               </TableRow>
-              {/* Filter Row */}
-              <TableRow sx={{ bgcolor: 'background.paper' }}>
+
+              {/* Filter row */}
+              <TableRow
+                sx={{
+                  bgcolor: '#FAFBFC',
+                  '& .MuiTableCell-root': {
+                    py: 0.75,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                  },
+                }}
+              >
                 <TableCell />
                 <TableCell>
-                  <TextField
-                    size="small"
-                    variant="standard"
-                    placeholder="Filter ID"
-                    value={filters.teacherId}
-                    onChange={(e) => handleFilterChange('teacherId', e.target.value)}
+                  <TextField size="small" variant="standard" placeholder="ID" value={filters.teacherId}
+                    onChange={e => handleFilterChange('teacherId', e.target.value)}
                     InputProps={{
-                      sx: { fontSize: '0.8125rem' },
+                      sx: { fontSize: '0.8rem' },
                       endAdornment: filters.teacherId && (
                         <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => clearFilter('teacherId')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                          <IconButton size="small" onClick={() => clearFilter('teacherId')}>
+                            <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                          </IconButton>
                         </InputAdornment>
-                      )
+                      ),
                     }}
                   />
                 </TableCell>
                 <TableCell>
-                  <TextField
-                    size="small"
-                    variant="standard"
-                    placeholder="Filter Name"
-                    value={filters.name}
-                    onChange={(e) => handleFilterChange('name', e.target.value)}
+                  <TextField size="small" variant="standard" placeholder="Name" value={filters.name}
+                    onChange={e => handleFilterChange('name', e.target.value)}
                     InputProps={{
-                      sx: { fontSize: '0.8125rem' },
+                      sx: { fontSize: '0.8rem' },
                       endAdornment: filters.name && (
                         <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => clearFilter('name')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                          <IconButton size="small" onClick={() => clearFilter('name')}>
+                            <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                          </IconButton>
                         </InputAdornment>
-                      )
+                      ),
                     }}
                   />
                 </TableCell>
                 <TableCell>
-                  <TextField
-                    size="small"
-                    variant="standard"
-                    placeholder="Email"
-                    value={filters.email}
-                    onChange={(e) => handleFilterChange('email', e.target.value)}
+                  <TextField size="small" variant="standard" placeholder="Email" value={filters.email}
+                    onChange={e => handleFilterChange('email', e.target.value)}
                     InputProps={{
-                      sx: { fontSize: '0.8125rem' },
+                      sx: { fontSize: '0.8rem' },
                       endAdornment: filters.email && (
                         <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => clearFilter('email')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                          <IconButton size="small" onClick={() => clearFilter('email')}>
+                            <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                          </IconButton>
                         </InputAdornment>
-                      )
+                      ),
                     }}
                   />
-                  <TextField
-                    size="small"
-                    variant="standard"
-                    placeholder="Phone"
-                    value={filters.phone}
-                    onChange={(e) => handleFilterChange('phone', e.target.value)}
+                  <TextField size="small" variant="standard" placeholder="Phone" value={filters.phone}
+                    onChange={e => handleFilterChange('phone', e.target.value)}
                     InputProps={{
-                      sx: { fontSize: '0.8125rem', mt: 0.5 },
+                      sx: { fontSize: '0.8rem', mt: 0.5 },
                       endAdornment: filters.phone && (
                         <InputAdornment position="end">
-                          <IconButton size="small" onClick={() => clearFilter('phone')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                          <IconButton size="small" onClick={() => clearFilter('phone')}>
+                            <ClearIcon sx={{ fontSize: '0.8rem' }} />
+                          </IconButton>
                         </InputAdornment>
-                      )
+                      ),
                     }}
                   />
                 </TableCell>
                 <TableCell>
-                  <Autocomplete
-                    freeSolo
-                    size="small"
-                    options={cityOptions.map(o => o.label)}
-                    value={filters.city}
-                    onChange={(_e, newValue) => handleFilterChange('city', newValue || '')}
-                    onInputChange={(_e, newInputValue) => handleFilterChange('city', newInputValue)}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        variant="standard"
-                        placeholder="City"
-                        sx={{ '& .MuiInput-root': { fontSize: '0.8125rem' } }}
-                      />
+                  <Autocomplete freeSolo size="small" options={cityOptions.map(o => o.label)} value={filters.city}
+                    onChange={(_e, v) => handleFilterChange('city', v || '')}
+                    onInputChange={(_e, v) => handleFilterChange('city', v)}
+                    renderInput={params => (
+                      <TextField {...params} variant="standard" placeholder="City" sx={{ '& .MuiInput-root': { fontSize: '0.8rem' } }} />
                     )}
                   />
                 </TableCell>
                 <TableCell>
-                  <Autocomplete
-                    freeSolo
-                    size="small"
-                    options={areaOptions.map(o => o.label)}
-                    value={filters.area}
-                    onChange={(_e, newValue) => handleFilterChange('area', newValue || '')}
-                    onInputChange={(_e, newInputValue) => handleFilterChange('area', newInputValue)}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        variant="standard"
-                        placeholder="Area"
-                        sx={{ '& .MuiInput-root': { fontSize: '0.8125rem' } }}
-                      />
-                    )}
+                  <Autocomplete freeSolo size="small" options={areaOptions.map(o => o.label)} value={filters.area}
+                    onChange={(_e, v) => handleFilterChange('area', v || '')}
+                    onInputChange={(_e, v) => handleFilterChange('area', v)}
                     disabled={!filters.city}
+                    renderInput={params => (
+                      <TextField {...params} variant="standard" placeholder="Area" sx={{ '& .MuiInput-root': { fontSize: '0.8rem' } }} />
+                    )}
                   />
                 </TableCell>
-
                 <TableCell>
-                  <Select
-                    variant="standard"
-                    value={filters.preferredMode}
-                    onChange={(e) => handleFilterChange('preferredMode', e.target.value as string)}
-                    displayEmpty
-                    sx={{ fontSize: '0.8125rem', width: '100%' }}
+                  <Select variant="standard" value={filters.preferredMode} displayEmpty
+                    onChange={e => handleFilterChange('preferredMode', e.target.value as string)}
+                    sx={{ fontSize: '0.8rem', width: '100%' }}
                   >
                     <MenuItem value=""><em>Mode</em></MenuItem>
                     <MenuItem value="ONLINE">Online</MenuItem>
@@ -707,35 +781,26 @@ export default function TutorVerificationPage() {
                 <TableCell />
                 <TableCell />
                 <TableCell>
-                  <Autocomplete
-                    size="small"
+                  <Autocomplete size="small"
                     options={subjectsList}
-                    getOptionLabel={(option) => getOptionLabel(option)}
+                    getOptionLabel={option => getOptionLabel(option)}
                     value={
                       subjectsList.find(s => s._id === filters.subjects) ||
                       subjectOptions.find(o => o._id === filters.subjects || o.value === filters.subjects) ||
                       null
                     }
-                    onChange={(_e, newValue) => handleFilterChange('subjects', newValue ? (newValue._id || newValue.value) : '')}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        variant="standard"
-                        placeholder="Subject"
-                        sx={{ '& .MuiInput-root': { fontSize: '0.8125rem' } }}
-                      />
+                    onChange={(_e, v) => handleFilterChange('subjects', v ? (v._id || v.value) : '')}
+                    renderInput={params => (
+                      <TextField {...params} variant="standard" placeholder="Subject" sx={{ '& .MuiInput-root': { fontSize: '0.8rem' } }} />
                     )}
                   />
                 </TableCell>
                 <TableCell>
-                  <Select
-                    variant="standard"
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value as string)}
-                    displayEmpty
-                    sx={{ fontSize: '0.8125rem', width: '100%' }}
+                  <Select variant="standard" value={filters.status} displayEmpty
+                    onChange={e => handleFilterChange('status', e.target.value as string)}
+                    sx={{ fontSize: '0.8rem', width: '100%' }}
                   >
-                    <MenuItem value=""><em>Any Status</em></MenuItem>
+                    <MenuItem value=""><em>Any</em></MenuItem>
                     <MenuItem value="PENDING">Pending</MenuItem>
                     <MenuItem value="UNDER_REVIEW">Review</MenuItem>
                     <MenuItem value="VERIFIED">Verified</MenuItem>
@@ -743,15 +808,12 @@ export default function TutorVerificationPage() {
                   </Select>
                 </TableCell>
                 <TableCell>
-                  <Select
-                    variant="standard"
-                    value={filters.verifier}
-                    onChange={(e) => handleFilterChange('verifier', e.target.value as string)}
-                    displayEmpty
-                    sx={{ fontSize: '0.8125rem', width: '100%' }}
+                  <Select variant="standard" value={filters.verifier} displayEmpty
+                    onChange={e => handleFilterChange('verifier', e.target.value as string)}
+                    sx={{ fontSize: '0.8rem', width: '100%' }}
                   >
-                    <MenuItem value=""><em>Any Verifier</em></MenuItem>
-                    {verifiersList.map((v) => (
+                    <MenuItem value=""><em>Any</em></MenuItem>
+                    {verifiersList.map(v => (
                       <MenuItem key={v._id} value={v._id}>{v.name}</MenuItem>
                     ))}
                   </Select>
@@ -759,112 +821,172 @@ export default function TutorVerificationPage() {
                 <TableCell />
               </TableRow>
             </TableHead>
+
+            {/* Body */}
             <TableBody>
               {tab === 0 && (
                 <>
                   {loading ? (
-                    <TableRow><TableCell colSpan={14} align="center"><LoadingSpinner /></TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
+                        <LoadingSpinner />
+                      </TableCell>
+                    </TableRow>
                   ) : error ? (
-                    <TableRow><TableCell colSpan={14} align="center"><ErrorAlert error={error} /></TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={13} align="center">
+                        <ErrorAlert error={error} />
+                      </TableCell>
+                    </TableRow>
                   ) : pending.length === 0 ? (
-                    <TableRow><TableCell colSpan={14} align="center" sx={{ py: 8 }}><Typography color="text.secondary">No pending verifications</Typography></TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={13} align="center" sx={{ py: 8 }}>
+                        <HourglassEmptyOutlinedIcon sx={{ fontSize: 36, color: 'text.disabled', mb: 1, display: 'block', mx: 'auto' }} />
+                        <Typography variant="body2" color="text.secondary">
+                          No pending verifications
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     pending.map((t, idx) => (
-                      <TableRow key={t.id} hover>
+                      <TableRow
+                        key={t.id}
+                        hover
+                        sx={{
+                          '&:hover': { bgcolor: alpha('#6366F1', 0.03) },
+                          transition: 'background 120ms ease-out',
+                        }}
+                      >
                         <TableCell>
-                          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>{idx + 1}</Typography>
+                          <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 700 }}>
+                            {idx + 1}
+                          </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{t.teacherId || '-'}</Typography>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
+                            {t.teacherId || '-'}
+                          </Typography>
                         </TableCell>
                         <TableCell>
-                          <Box>
-                            <Typography
-                              variant="subtitle2"
-                              component={RouterLink}
-                              to={`/tutor-profile/${t.id || (t as any)._id}`}
-                              sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
-                            >
-                              {t.user.name}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">DOCS: {t.documents?.length || 0}</Typography>
-                          </Box>
+                          <Typography
+                            variant="subtitle2"
+                            component={RouterLink}
+                            to={`/tutor-profile/${t.id || (t as any)._id}`}
+                            sx={{ color: 'primary.main', textDecoration: 'none', fontWeight: 600, '&:hover': { textDecoration: 'underline' } }}
+                          >
+                            {t.user.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.disabled">
+                            {t.documents?.length || 0} docs
+                          </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2">{t.user.email}</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.user.email}</Typography>
                           <Typography variant="caption" color="text.secondary">{t.user.phone || '-'}</Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2">{t.user.city || '-'}</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.user.city || '-'}</Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 120 }} title={(t.preferredLocations || []).join(', ')}>
-                            {(t.preferredLocations || []).join(', ')}
+                          <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 110 }}
+                            title={(t.preferredLocations || []).join(', ')}>
+                            {(t.preferredLocations || []).join(', ') || '-'}
                           </Typography>
                         </TableCell>
-
                         <TableCell>
-                          <Typography variant="body2">{t.preferredMode || '-'}</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.preferredMode || '-'}</Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2">{t.classesAssigned} Classes</Typography>
-                          <Typography variant="caption" color="text.secondary">{t.demosApproved} Demos</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.classesAssigned} cls</Typography>
+                          <Typography variant="caption" color="text.secondary">{t.demosApproved} demos</Typography>
                         </TableCell>
-                        <TableCell>{t.experienceHours} hrs</TableCell>
-                        <TableCell sx={{ maxWidth: 200 }}>
-                          <Typography variant="body2" noWrap title={formatSubjectDisplay(t.subjects)}>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.experienceHours} hrs</Typography>
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 180 }}>
+                          <Typography variant="body2" sx={{ fontSize: '0.8rem' }} noWrap title={formatSubjectDisplay(t.subjects)}>
                             {formatSubjectDisplay(t.subjects, 2)}
                           </Typography>
                         </TableCell>
-                        <TableCell><VerificationStatusChip status={t.verificationStatus} /></TableCell>
+                        <TableCell>
+                          <VerificationStatusChip status={t.verificationStatus} />
+                        </TableCell>
                         <TableCell>
                           {t.verifiedBy ? (
-                            <MuiLink component={RouterLink} to={`/manager-profile/${(t.verifiedBy as any).id || (t.verifiedBy as any)._id}`} sx={{ color: 'primary.main', textDecoration: 'none' }}>
+                            <MuiLink component={RouterLink} to={`/manager-profile/${(t.verifiedBy as any).id || (t.verifiedBy as any)._id}`}
+                              sx={{ color: 'primary.main', textDecoration: 'none', fontSize: '0.8rem', '&:hover': { textDecoration: 'underline' } }}>
                               {t.verifiedBy.name}
                             </MuiLink>
-                          ) : '-'}
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">—</Typography>
+                          )}
                         </TableCell>
                         <TableCell align="right">
-                          <Box display="flex" justifyContent="flex-end" gap={1}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              component={RouterLink}
-                              to={`/tutors/verify/${t.id || (t as any)._id}`}
-                            >
-                              Details
-                            </Button>
-                          </Box>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            component={RouterLink}
+                            to={`/tutors/verify/${t.id || (t as any)._id}`}
+                            sx={{
+                              borderRadius: 1.5,
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                              transition: 'transform 160ms ease-out',
+                              '&:active': { transform: 'scale(0.96)' },
+                            }}
+                          >
+                            Review
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))
-                  )
-                  }
+                  )}
                 </>
               )}
 
               {tab === 1 && (
                 <>
                   {loadingTutors ? (
-                    <TableRow><TableCell colSpan={14} align="center"><LoadingSpinner /></TableCell></TableRow>
+                    <TableRow>
+                      <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
+                        <LoadingSpinner />
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     <>
+                      {tutors.length === 0 && !tutorsError && (
+                        <TableRow>
+                          <TableCell colSpan={13} align="center" sx={{ py: 8 }}>
+                            <PeopleAltOutlinedIcon sx={{ fontSize: 36, color: 'text.disabled', mb: 1, display: 'block', mx: 'auto' }} />
+                            <Typography variant="body2" color="text.secondary">No tutors found</Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
                       {tutors.map((t, idx) => (
-                        <TableRow key={t.id} hover>
+                        <TableRow
+                          key={t.id}
+                          hover
+                          sx={{
+                            '&:hover': { bgcolor: alpha('#6366F1', 0.03) },
+                            transition: 'background 120ms ease-out',
+                          }}
+                        >
                           <TableCell>
-                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</Typography>
+                            <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 700 }}>
+                              {page * rowsPerPage + idx + 1}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{t.teacherId || '-'}</Typography>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
+                              {t.teacherId || '-'}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            <Box display="flex" alignItems="center" gap={2}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
                               <Avatar
                                 src={t.documents?.find(d => d.documentType === 'PROFILE_PHOTO')?.documentUrl}
-                                imgProps={{
-                                  crossOrigin: 'anonymous',
-                                  onError: () => console.error('Tutor Table Avatar Error', t.user?.name)
-                                }}
+                                sx={{ width: 30, height: 30, fontSize: '0.75rem', fontWeight: 700 }}
+                                imgProps={{ crossOrigin: 'anonymous' }}
                               >
                                 {(t.user?.name || 'T').charAt(0).toUpperCase()}
                               </Avatar>
@@ -872,45 +994,52 @@ export default function TutorVerificationPage() {
                                 variant="subtitle2"
                                 component={RouterLink}
                                 to={`/tutor-profile/${(t as any).id || (t as any)._id}`}
-                                sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                                sx={{ color: 'primary.main', textDecoration: 'none', fontWeight: 600, '&:hover': { textDecoration: 'underline' } }}
                               >
-                                {t.user?.name || 'Unknown Tutor'}
+                                {t.user?.name || 'Unknown'}
                               </MuiLink>
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2">{t.user?.email}</Typography>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.user?.email}</Typography>
                             <Typography variant="caption" color="text.secondary">{t.user?.phone || '-'}</Typography>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2">{t.user?.city || '-'}</Typography>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.user?.city || '-'}</Typography>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 120 }} title={(t.preferredLocations || []).filter(l => l !== t.user?.city).join(', ')}>
-                              {(t.preferredLocations || []).filter(l => l !== t.user?.city).join(', ')}
+                            <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 110 }}
+                              title={(t.preferredLocations || []).filter(l => l !== t.user?.city).join(', ')}>
+                              {(t.preferredLocations || []).filter(l => l !== t.user?.city).join(', ') || '-'}
                             </Typography>
                           </TableCell>
-
                           <TableCell>
-                            <Typography variant="body2">{t.preferredMode || '-'}</Typography>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.preferredMode || '-'}</Typography>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2">{t.classesAssigned} Classes</Typography>
-                            <Typography variant="caption" color="text.secondary">{t.demosApproved} Demos</Typography>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.classesAssigned} cls</Typography>
+                            <Typography variant="caption" color="text.secondary">{t.demosApproved} demos</Typography>
                           </TableCell>
-                          <TableCell>{t.experienceHours} hrs</TableCell>
-                          <TableCell sx={{ maxWidth: 200 }}>
-                            <Typography variant="body2" noWrap title={formatSubjectDisplay(t.subjects)}>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>{t.experienceHours} hrs</Typography>
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 180 }}>
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem' }} noWrap title={formatSubjectDisplay(t.subjects)}>
                               {formatSubjectDisplay(t.subjects, 2)}
                             </Typography>
                           </TableCell>
-                          <TableCell><VerificationStatusChip status={t.verificationStatus} /></TableCell>
+                          <TableCell>
+                            <VerificationStatusChip status={t.verificationStatus} />
+                          </TableCell>
                           <TableCell>
                             {t.verifiedBy ? (
-                              <MuiLink component={RouterLink} to={`/manager-profile/${(t.verifiedBy as any).id || (t.verifiedBy as any)._id}`} sx={{ color: 'primary.main', textDecoration: 'none' }}>
+                              <MuiLink component={RouterLink} to={`/manager-profile/${(t.verifiedBy as any).id || (t.verifiedBy as any)._id}`}
+                                sx={{ color: 'primary.main', textDecoration: 'none', fontSize: '0.8rem', '&:hover': { textDecoration: 'underline' } }}>
                                 {t.verifiedBy.name}
                               </MuiLink>
-                            ) : '-'}
+                            ) : (
+                              <Typography variant="caption" color="text.disabled">—</Typography>
+                            )}
                           </TableCell>
                           <TableCell align="right">
                             <Button
@@ -918,6 +1047,13 @@ export default function TutorVerificationPage() {
                               variant="outlined"
                               component={RouterLink}
                               to={`/tutors/verify/${(t as any).id || (t as any)._id}`}
+                              sx={{
+                                borderRadius: 1.5,
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                                transition: 'transform 160ms ease-out',
+                                '&:active': { transform: 'scale(0.96)' },
+                              }}
                             >
                               View
                             </Button>
@@ -925,7 +1061,11 @@ export default function TutorVerificationPage() {
                         </TableRow>
                       ))}
                       {tutorsError && (
-                        <TableRow><TableCell colSpan={10} align="center"><ErrorAlert error={tutorsError} /></TableCell></TableRow>
+                        <TableRow>
+                          <TableCell colSpan={13} align="center">
+                            <ErrorAlert error={tutorsError} />
+                          </TableCell>
+                        </TableRow>
                       )}
                     </>
                   )}
@@ -936,6 +1076,7 @@ export default function TutorVerificationPage() {
         </TableContainer>
       )}
 
+      {/* Pagination */}
       {tab === 1 && (
         <TablePagination
           rowsPerPageOptions={[10, 25, 50, 100]}
@@ -945,30 +1086,22 @@ export default function TutorVerificationPage() {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
+          sx={{ borderTop: '1px solid', borderColor: 'divider' }}
         />
       )}
 
+      {/* Dialogs / Modals */}
       <Dialog open={docsOpen} onClose={() => setDocsOpen(false)} maxWidth="md" fullWidth>
         <DialogContent>
           {selectedTutor && (
-            <DocumentViewer
-              documents={selectedTutor?.documents || []}
-              onView={handleViewDoc}
-              canDelete={false}
-            />
+            <DocumentViewer documents={selectedTutor?.documents || []} onView={handleViewDoc} canDelete={false} />
           )}
         </DialogContent>
       </Dialog>
 
-      <DocumentViewerModal
-        open={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        document={selectedDoc}
-      />
-
+      <DocumentViewerModal open={viewerOpen} onClose={() => setViewerOpen(false)} document={selectedDoc} />
       <VerificationModal open={verifyOpen} onClose={() => setVerifyOpen(false)} tutor={selectedTutor} onSubmit={handleVerifySubmit} />
-      <SnackbarNotification open={snack.open} message={snack.message} severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))} />
-
+      <SnackbarNotification open={snack.open} message={snack.message} severity={snack.severity} onClose={() => setSnack(s => ({ ...s, open: false }))} />
       <ConfirmDialog
         open={confirmConfig.open}
         onClose={() => setConfirmConfig(c => ({ ...c, open: false }))}
@@ -981,4 +1114,3 @@ export default function TutorVerificationPage() {
     </Container>
   );
 }
-
