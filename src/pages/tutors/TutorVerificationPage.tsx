@@ -587,14 +587,31 @@ export default function TutorVerificationPage() {
                   <TextField
                     size="small"
                     variant="standard"
-                    placeholder="Email/Phone"
-                    value={filters.email || filters.phone}
-                    onChange={(e) => {
-                      handleFilterChange('email', e.target.value);
-                      handleFilterChange('phone', e.target.value);
-                    }}
+                    placeholder="Email"
+                    value={filters.email}
+                    onChange={(e) => handleFilterChange('email', e.target.value)}
                     InputProps={{
-                      sx: { fontSize: '0.8125rem' }
+                      sx: { fontSize: '0.8125rem' },
+                      endAdornment: filters.email && (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => clearFilter('email')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                        </InputAdornment>
+                      )
+                    }}
+                  />
+                  <TextField
+                    size="small"
+                    variant="standard"
+                    placeholder="Phone"
+                    value={filters.phone}
+                    onChange={(e) => handleFilterChange('phone', e.target.value)}
+                    InputProps={{
+                      sx: { fontSize: '0.8125rem', mt: 0.5 },
+                      endAdornment: filters.phone && (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => clearFilter('phone')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                        </InputAdornment>
+                      )
                     }}
                   />
                 </TableCell>
