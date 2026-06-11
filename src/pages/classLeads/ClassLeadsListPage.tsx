@@ -37,7 +37,7 @@ import { getSubjectList, formatHierarchicalSubject, getLeafSubjectList } from '.
 
 // ── Deterministic avatar colours ──────────────────────────────────────────────
 const AVATAR_PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#2E7D32'];
-const getAvatarColor = (name: string) => AVATAR_PALETTE[(name?.charCodeAt(0) ?? 0) % AVATAR_PALETTE.length];
+const getAvatarColor = (name: string) => AVATAR_PALETTE[(name?.charCodeAt(0) || 0) % AVATAR_PALETTE.length];
 const getInitials = (name: string) =>
   (name || '?').trim().split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
@@ -279,12 +279,31 @@ function LeadCardSkeleton({ index }: { index: number }) {
 }
 
 // ── Stat pill in hero ─────────────────────────────────────────────────────────
-function HeroStat({ label, value, delay }: { label: string; value: number | string; delay: number }) {
+function HeroStat({
+  label, value, delay, onClick, active, onClear,
+}: {
+  label: string; value: number | string; delay: number;
+  onClick?: () => void; active?: boolean; onClear?: (e: React.MouseEvent) => void;
+}) {
   return (
     <Box
+      onClick={onClick}
       sx={{
         textAlign: 'center',
         px: { xs: 1.5, sm: 2 },
+        py: 0.5,
+        borderRadius: '8px',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'background 160ms ease, box-shadow 160ms ease',
+        position: 'relative',
+        ...(active && {
+          bgcolor: 'rgba(255,255,255,0.15)',
+          boxShadow: '0 0 0 1.5px rgba(255,255,255,0.55)',
+        }),
+        ...(onClick && !active && {
+          '&:hover': { bgcolor: 'rgba(255,255,255,0.08)' },
+          '&:active': { transform: 'scale(0.95)' },
+        }),
         '@keyframes statIn': {
           from: { opacity: 0, transform: 'translateY(6px)' },
           to: { opacity: 1, transform: 'translateY(0)' },
@@ -293,10 +312,30 @@ function HeroStat({ label, value, delay }: { label: string; value: number | stri
         '@media (prefers-reduced-motion: reduce)': { animation: 'none', opacity: 1 },
       }}
     >
-      <Typography fontWeight={800} sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, lineHeight: 1 }}>
-        {value}
-      </Typography>
-      <Typography sx={{ fontSize: '0.68rem', opacity: 0.75, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', mt: 0.25 }}>
+      <Box display="flex" alignItems="center" justifyContent="center" gap={0.25}>
+        <Typography fontWeight={800} sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, lineHeight: 1 }}>
+          {value}
+        </Typography>
+        {active && onClear && (
+          <Box
+            component="span"
+            onClick={onClear}
+            sx={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 14, height: 14, borderRadius: '50%',
+              bgcolor: 'rgba(255,255,255,0.3)',
+              cursor: 'pointer',
+              fontSize: '0.6rem', fontWeight: 800, color: 'white',
+              lineHeight: 1, ml: 0.25,
+              transition: 'bgcolor 120ms ease',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.5)' },
+            }}
+          >
+            ✕
+          </Box>
+        )}
+      </Box>
+      <Typography sx={{ fontSize: '0.68rem', opacity: active ? 1 : 0.75, fontWeight: active ? 700 : 600, textTransform: 'uppercase', letterSpacing: '0.05em', mt: 0.25 }}>
         {label}
       </Typography>
     </Box>
@@ -312,13 +351,36 @@ export default function ClassLeadsListPage() {
   const isAdmin = user?.role === 'ADMIN';
   const { isAuthorized: canCreateLeads } = usePermissionCheck('canCreateLeads');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [siteLeadsCount, setSiteLeadsCount] = useState<number | null>(null);
+  const [kpiStats, setKpiStats] = useState<{
+    total: number | null; fresh: number | null; announced: number | null;
+    demoScheduled: number | null; demoCompleted: number | null;
+    converted: number | null; site: number | null;
+  }>({ total: null, fresh: null, announced: null, demoScheduled: null, demoCompleted: null, converted: null, site: null });
 
   useEffect(() => {
-    getClassLeads({ leadSource: 'SITE', limit: 1, page: 1 })
-      .then((res) => setSiteLeadsCount((res as any).pagination?.total ?? (res as any).total ?? null))
-      .catch(() => setSiteLeadsCount(null));
+    const pick = (res: any): number => (res as any).pagination?.total ?? (res as any).total ?? 0;
+    Promise.all([
+      getClassLeads({ limit: 1, page: 1 }),
+      getClassLeads({ status: 'NEW', limit: 1, page: 1 }),
+      getClassLeads({ status: 'ANNOUNCED', limit: 1, page: 1 }),
+      getClassLeads({ status: 'DEMO_SCHEDULED', limit: 1, page: 1 }),
+      getClassLeads({ status: 'DEMO_COMPLETED', limit: 1, page: 1 }),
+      getClassLeads({ status: 'CONVERTED', limit: 1, page: 1 }),
+      getClassLeads({ leadSource: 'SITE', limit: 1, page: 1 }),
+    ]).then(([all, fresh, announced, demoSched, demoComp, converted, site]) => {
+      setKpiStats({
+        total: pick(all),
+        fresh: pick(fresh),
+        announced: pick(announced),
+        demoScheduled: pick(demoSched),
+        demoCompleted: pick(demoComp),
+        converted: pick(converted),
+        site: pick(site),
+      });
+    }).catch(() => {});
   }, []);
+
+  const [kpiFilter, setKpiFilter] = useState<{ key: string; status?: string; leadSource?: string } | null>(null);
 
   const [filters, setFilters] = useState({
     studentName: '', grade: '', subject: '', board: '', mode: '',
@@ -355,7 +417,8 @@ export default function ClassLeadsListPage() {
 
   const { leads, loading, error, pagination, deleteLead, updateStatus } = useClassLeads({
     page, limit: rowsPerPage,
-    status: debouncedFilters.status || undefined,
+    status: kpiFilter?.status ?? (debouncedFilters.status || undefined),
+    leadSource: kpiFilter?.leadSource,
     studentName: debouncedFilters.studentName || undefined,
     grade: debouncedFilters.grade || undefined,
     subject: debouncedFilters.subject || undefined,
@@ -370,7 +433,10 @@ export default function ClassLeadsListPage() {
 
   useEffect(() => { if (error) setShowErrorDialog(true); }, [error]);
 
-  const handleFilterChange = (field: string, value: string) => setFilters((p) => ({ ...p, [field]: value }));
+  const handleFilterChange = (field: string, value: string) => {
+    if (field === 'status') setKpiFilter(null);
+    setFilters((p) => ({ ...p, [field]: value }));
+  };
   const clearFilter = (field: string) => handleFilterChange(field, '');
 
   const handleSort = (col: string) => {
@@ -414,13 +480,7 @@ export default function ClassLeadsListPage() {
     [leads]
   );
 
-  // Stats computed from current page (indicative counts)
-  const pageStats = useMemo(() => ({
-    total: pagination.total || formattedLeads.length,
-    converted: formattedLeads.filter((l) => l.status === 'CONVERTED' || (l as any).status === 'WON').length,
-    demo: formattedLeads.filter((l) => l.status === 'DEMO_SCHEDULED' || l.status === 'DEMO_COMPLETED').length,
-    fresh: formattedLeads.filter((l) => l.status === 'NEW').length,
-  }), [formattedLeads, pagination.total]);
+  const totalFiltered = pagination.total || formattedLeads.length;
 
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => v && k !== 'search').length;
 
@@ -477,83 +537,81 @@ export default function ClassLeadsListPage() {
             </Typography>
           </Box>
 
-          <Box display="flex" alignItems="center" gap={2} sx={{ flexShrink: 0 }}>
-            {/* Stats pills — desktop inline, mobile below */}
-            <Box
-              sx={{
-                display: { xs: 'none', sm: 'flex' },
-                gap: 0,
-                bgcolor: 'rgba(0,0,0,0.2)',
-                borderRadius: '12px',
-                px: 1,
-                py: 0.75,
-                border: '1px solid rgba(255,255,255,0.12)',
-              }}
-            >
-              <HeroStat label="Total" value={loading ? '…' : pageStats.total} delay={200} />
-              <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5 }} />
-              <HeroStat label="New" value={loading ? '…' : pageStats.fresh} delay={260} />
-              <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5 }} />
-              <HeroStat label="Converted" value={loading ? '…' : pageStats.converted} delay={320} />
-              <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5 }} />
-              <HeroStat label="From Site" value={siteLeadsCount === null ? '…' : siteLeadsCount} delay={380} />
-            </Box>
-
-            <Tooltip title={user?.role === 'MANAGER' && !canCreateLeads ? 'No permission to create leads' : ''} arrow>
-              <span>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => navigate('/class-leads/new')}
-                  disabled={user?.role === 'MANAGER' && !canCreateLeads}
-                  sx={{
-                    bgcolor: 'white',
-                    color: '#1B5E20',
-                    fontWeight: 800,
-                    px: 2.5,
-                    py: 1,
-                    borderRadius: '10px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    transition: 'transform 160ms cubic-bezier(0.23,1,0.32,1), box-shadow 160ms ease',
-                    '@media (hover: hover) and (pointer: fine)': {
-                      '&:hover': { bgcolor: 'rgba(255,255,255,0.95)', transform: 'translateY(-2px)', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' },
-                    },
-                    '@media (hover: none)': { '&:active': { transform: 'scale(0.97)' } },
-                    '&:disabled': { bgcolor: 'rgba(255,255,255,0.45)', color: 'rgba(27,94,32,0.5)' },
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  New Lead
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
+          <Tooltip title={user?.role === 'MANAGER' && !canCreateLeads ? 'No permission to create leads' : ''} arrow>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/class-leads/new')}
+                disabled={user?.role === 'MANAGER' && !canCreateLeads}
+                sx={{
+                  bgcolor: 'white',
+                  color: '#1B5E20',
+                  fontWeight: 800,
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: '10px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  transition: 'transform 160ms cubic-bezier(0.23,1,0.32,1), box-shadow 160ms ease',
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.95)', transform: 'translateY(-2px)', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' },
+                  },
+                  '@media (hover: none)': { '&:active': { transform: 'scale(0.97)' } },
+                  '&:disabled': { bgcolor: 'rgba(255,255,255,0.45)', color: 'rgba(27,94,32,0.5)' },
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                New Lead
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
 
-        {/* Mobile stats row */}
+        {/* KPI strip — full width, scrollable */}
         <Box
           sx={{
-            display: { xs: 'flex', sm: 'none' },
+            display: 'flex',
+            overflowX: 'auto',
             gap: 0,
             bgcolor: 'rgba(0,0,0,0.2)',
-            borderRadius: '10px',
+            borderRadius: '12px',
             px: 1,
-            py: 0.5,
+            py: { xs: 0.5, sm: 0.75 },
             border: '1px solid rgba(255,255,255,0.12)',
-            mt: 2,
+            mt: 2.5,
             position: 'relative',
             zIndex: 1,
+            scrollbarWidth: 'none',
+            '&::-webkit-scrollbar': { display: 'none' },
           }}
         >
-          <HeroStat label="Total" value={loading ? '…' : pageStats.total} delay={200} />
-          <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.75 }} />
-          <HeroStat label="New" value={loading ? '…' : pageStats.fresh} delay={240} />
-          <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.75 }} />
-          <HeroStat label="Demo" value={loading ? '…' : pageStats.demo} delay={280} />
-          <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.75 }} />
-          <HeroStat label="Converted" value={loading ? '…' : pageStats.converted} delay={320} />
-          <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.75 }} />
-          <HeroStat label="Site" value={siteLeadsCount === null ? '…' : siteLeadsCount} delay={360} />
+          {([
+            { key: null,              label: 'Total',        value: kpiStats.total,         status: undefined,          leadSource: undefined },
+            { key: 'NEW',             label: 'New',          value: kpiStats.fresh,          status: 'NEW',              leadSource: undefined },
+            { key: 'ANNOUNCED',       label: 'Announced',    value: kpiStats.announced,      status: 'ANNOUNCED',        leadSource: undefined },
+            { key: 'DEMO_SCHEDULED',  label: 'Demo Sched',   value: kpiStats.demoScheduled,  status: 'DEMO_SCHEDULED',   leadSource: undefined },
+            { key: 'DEMO_COMPLETED',  label: 'Demo Done',    value: kpiStats.demoCompleted,  status: 'DEMO_COMPLETED',   leadSource: undefined },
+            { key: 'CONVERTED',       label: 'Converted',    value: kpiStats.converted,      status: 'CONVERTED',        leadSource: undefined },
+            { key: 'SITE',            label: 'From Site',    value: kpiStats.site,           status: undefined,          leadSource: 'SITE' },
+          ] as const).map((stat, i, arr) => (
+            <Box key={stat.label} display="flex" alignItems="stretch" sx={{ flexShrink: 0 }}>
+              <HeroStat
+                label={stat.label}
+                value={stat.value === null ? '…' : stat.value}
+                delay={180 + i * 40}
+                active={stat.key !== null && kpiFilter?.key === stat.key}
+                onClick={() => {
+                  if (stat.key === null) { setKpiFilter(null); setPage(1); return; }
+                  setKpiFilter(kpiFilter?.key === stat.key ? null : { key: stat.key, status: stat.status, leadSource: stat.leadSource });
+                  setPage(1);
+                }}
+                onClear={stat.key !== null ? (e) => { e.stopPropagation(); setKpiFilter(null); setPage(1); } : undefined}
+              />
+              {i < arr.length - 1 && (
+                <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5, flexShrink: 0 }} />
+              )}
+            </Box>
+          ))}
         </Box>
 
         {/* Orbs */}
