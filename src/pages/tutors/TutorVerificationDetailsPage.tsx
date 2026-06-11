@@ -225,6 +225,10 @@ const TutorVerificationDetailsPage: React.FC = () => {
                                 <ListItemText primary={tutor.residentialAddress || 'N/A'} secondary="Residential Address" />
                             </ListItem>
                             <ListItem disableGutters>
+                                <ListItemIcon sx={{ minWidth: 35 }}><LocationIcon color="action" fontSize="small" /></ListItemIcon>
+                                <ListItemText primary={tutor.permanentAddress || 'N/A'} secondary="Permanent Address" />
+                            </ListItem>
+                            <ListItem disableGutters>
                                 <ListItemText
                                     primary={tutor.user.gender || 'N/A'}
                                     secondary="Gender"
