@@ -55,7 +55,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
   const isFieldReadOnly = (fieldName: string) => {
     if (mode === 'create') return false;
     if (initialData?.verificationStatus !== 'VERIFIED') return false;
-    const allowedFields = ['city', 'preferredAreas', 'preferredMode', 'subjects', 'bio', 'languagesKnown', 'skills', 'alternatePhone'];
+    const allowedFields = ['city', 'preferredAreas', 'preferredMode', 'subjects', 'bio', 'languagesKnown', 'skills', 'alternatePhone', 'extracurricularActivities'];
     return !allowedFields.includes(fieldName);
   };
 
