@@ -301,6 +301,13 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, drawerWidth = 280, onR
             width: drawerWidth,
             boxSizing: 'border-box',
             overflowX: 'hidden',
+            /* iOS-feel drawer curve (from Ionic Framework) */
+            transition: 'transform 280ms cubic-bezier(0.32, 0.72, 0, 1) !important',
+          },
+          '& .MuiBackdrop-root': {
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            backgroundColor: 'rgba(15, 23, 42, 0.35)',
           },
         }}
       >

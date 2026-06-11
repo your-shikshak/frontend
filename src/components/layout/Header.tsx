@@ -84,11 +84,17 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showSidebarMenu = true }) 
       elevation={0}
       sx={{
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        bgcolor: alpha('#ffffff', 0.8),
-        backdropFilter: 'blur(12px)',
+        bgcolor: '#ffffff',
         borderBottom: 'none',
-        boxShadow: '0 4px 20px rgba(15, 23, 42, 0.03)',
+        boxShadow: '0 1px 0 rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.03)',
         color: '#0f172a',
+        /* Slide down on mobile */
+        '@keyframes headerSlideDown': {
+          from: { transform: 'translateY(-100%)', opacity: 0 },
+          to: { transform: 'translateY(0)', opacity: 1 },
+        },
+        animation: { xs: 'headerSlideDown 360ms cubic-bezier(0.23,1,0.32,1) forwards', md: 'none' },
+        '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
       }}
     >
       <Toolbar sx={{ minHeight: { xs: 56, sm: 64, md: 70 }, px: { xs: 2, sm: 3 } }}>
@@ -117,8 +123,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showSidebarMenu = true }) 
               p: 0.5,
               borderRadius: 2,
               bgcolor: alpha('#6366f1', 0.06),
-              display: { xs: 'none', sm: 'flex' },
-              border: `1px solid ${alpha('#6366f1', 0.1)}`
+              display: 'flex',
+              border: `1px solid ${alpha('#6366f1', 0.1)}`,
             }}
           >
             <Box
@@ -126,8 +132,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showSidebarMenu = true }) 
               src="/1.jpg"
               alt="Logo"
               sx={{
-                height: { xs: 36, sm: 46 },
-                width: { xs: 36, sm: 46 },
+                height: { xs: 32, sm: 46 },
+                width: { xs: 32, sm: 46 },
                 borderRadius: '50%',
               }}
             />

@@ -1,49 +1,22 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { 
-  Container, 
-  Box, 
-  Typography, 
-  Grid, 
-  Paper, 
-  Card, 
-  CardContent, 
-  Chip, 
-  IconButton, 
-  Tooltip, 
-  Menu, 
-  MenuItem, 
-  useTheme,
-  alpha,
-  Divider,
-  Button,
-  Breadcrumbs,
-  Link,
-  Avatar,
-  TextField,
-  useMediaQuery,
-  FormControl,
-  Select,
-  InputLabel,
-  ThemeProvider,
-  createTheme
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import {
+  Box, Typography, Chip, IconButton, Menu, MenuItem,
+  alpha, Divider, Button, Avatar, useMediaQuery, useTheme,
+  FormControl, Select, InputLabel, Dialog, DialogTitle, DialogContent,
+  DialogActions, Collapse,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import SchoolIcon from '@mui/icons-material/School';
-import PersonIcon from '@mui/icons-material/Person';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import LeadIcon from '@mui/icons-material/ContactMail';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
-import InfoIcon from '@mui/icons-material/Info';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getCRMLeads, updateClassLeadStatus, getLeadFilterOptions, reassignLead } from '../../services/leadService';
-import { IClassLead, IUser } from '../../types';
+import { IClassLead } from '../../types';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import { format } from 'date-fns';
@@ -51,300 +24,293 @@ import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../../store/slices/authSlice';
 import { USER_ROLES } from '../../constants';
 
-const managerTheme = createTheme({
-  palette: {
-    mode: 'light',
-    background: { default: '#f6fafe', paper: '#ffffff' },
-    primary: { main: '#0035c5', light: '#0047ff', dark: '#001257' },
-    secondary: { main: '#4658ac', light: '#94a6ff', dark: '#24388b' },
-    text: { primary: '#171c1f', secondary: '#434657' },
-    divider: 'rgba(196, 197, 218, 0.4)',
-  },
-  typography: {
-    fontFamily: '"Inter", "Helvetica", "Arial", sans-serif',
-    h4: { fontFamily: '"Manrope", sans-serif', fontWeight: 800 },
-    h5: { fontFamily: '"Manrope", sans-serif', fontWeight: 700 },
-    subtitle1: { fontFamily: '"Manrope", sans-serif', fontWeight: 700 },
-    subtitle2: { fontFamily: '"Manrope", sans-serif', fontWeight: 700 },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: { textTransform: 'none', borderRadius: 8, fontWeight: 600 },
-        containedPrimary: {
-          background: 'linear-gradient(135deg, #0035c5 0%, #0047ff 100%)',
-          boxShadow: '0 4px 12px rgba(0, 53, 197, 0.2)',
-          '&:hover': {
-            background: 'linear-gradient(135deg, #001257 0%, #0035c5 100%)',
-            boxShadow: '0 6px 16px rgba(0, 53, 197, 0.3)',
-          }
-        }
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: { borderRadius: 9999, fontWeight: 600 },
-      },
-    },
-  },
-});
+// ── Avatar palette ────────────────────────────────────────────────────────────
+const AVATAR_PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#2E7D32'];
+const getAvatarColor = (name: string) => AVATAR_PALETTE[(name?.charCodeAt(0) ?? 0) % AVATAR_PALETTE.length];
+const getInitials = (name: string) =>
+  (name || '?').trim().split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
+// ── Column config ─────────────────────────────────────────────────────────────
 const COLUMN_CONFIG = [
-  { key: 'new', label: 'New', color: '#0047ff', description: 'Newly created leads' },
-  { key: 'announced', label: 'Announced', color: '#8b5cf6', description: 'Announced to tutors (0 interest)' },
-  { key: 'interested', label: 'Interested', color: '#f59e0b', description: 'Tutors showing interest' },
-  { key: 'demoScheduled', label: 'Demo Scheduled', color: '#10b981', description: 'Demos are scheduled' },
-  { key: 'demoPending', label: 'Demo Completed', color: '#0035c5', description: 'Demos done, approval pending' },
-  { key: 'won', label: 'Won', color: '#008a5b', description: 'Leads converted to classes' },
-  { key: 'others', label: 'Others', color: '#747688', description: 'Rejected or closed leads' },
+  { key: 'new',          label: 'New',            color: '#6366f1', description: 'Freshly created leads' },
+  { key: 'announced',    label: 'Announced',       color: '#8b5cf6', description: 'Posted to tutors' },
+  { key: 'interested',   label: 'Interested',      color: '#f59e0b', description: 'Tutors showing interest' },
+  { key: 'demoScheduled',label: 'Demo Scheduled',  color: '#10b981', description: 'Demos booked' },
+  { key: 'demoPending',  label: 'Demo Completed',  color: '#0ea5e9', description: 'Pending approval' },
+  { key: 'won',          label: 'Won',             color: '#2E7D32', description: 'Converted to class' },
+  { key: 'others',       label: 'Others',          color: '#94a3b8', description: 'Rejected / closed' },
 ];
 
+const getDaysLabel = (date: string | Date) => {
+  const days = Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
+  return days === 0 ? 'Today' : `${days}d ago`;
+};
+
 const getPriority = (date: string | Date) => {
-  const days = Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 3600 * 24));
-  if (days > 7) return { label: 'High Priority', color: '#b82800', bg: '#ffd1c6', icon: <PriorityHighIcon /> };
-  if (days > 3) return { label: 'Medium Priority', color: '#ca8100', bg: '#ffeccc', icon: <InfoIcon /> };
-  return { label: 'Normal', color: '#434657', bg: '#eaeef2', icon: null };
+  const days = Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
+  if (days > 7) return { label: 'High', color: '#ef4444', bg: alpha('#ef4444', 0.08) };
+  if (days > 3) return { label: 'Mid',  color: '#f59e0b', bg: alpha('#f59e0b', 0.08) };
+  return null;
 };
 
-const getDaysInStage = (date: string | Date) => {
-  const days = Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 3600 * 24));
-  return days === 0 ? 'Today' : `${days} days ago`;
-};
-
-const LeadCard: React.FC<{ lead: IClassLead; managers: { id: string, name: string }[]; onRefresh: () => void; onReassign: (lead: IClassLead) => void }> = ({ lead, managers, onRefresh, onReassign }) => {
-  const theme = useTheme();
+// ── Lead card ─────────────────────────────────────────────────────────────────
+const LeadCard: React.FC<{
+  lead: IClassLead;
+  delay: number;
+  managers: { id: string; name: string }[];
+  onRefresh: () => void;
+  onReassign: (lead: IClassLead) => void;
+}> = ({ lead, delay, managers, onRefresh, onReassign }) => {
   const navigate = useNavigate();
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === USER_ROLES.ADMIN;
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
+  const ac = getAvatarColor(lead.studentName || '');
+  const priority = getPriority(lead.createdAt);
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
+  const subjects = useMemo(() => {
+    const raw = lead.subject;
+    const arr: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    return arr.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || '').filter(Boolean).slice(0, 2);
+  }, [lead.subject]);
 
   const handleMoveTo = async (status: string) => {
-    try {
-      await updateClassLeadStatus(lead.id, status);
-      onRefresh();
-    } catch (err) {
-      console.error('Failed to update status', err);
-    }
-    handleMenuClose();
+    setAnchorEl(null);
+    try { await updateClassLeadStatus(lead.id, status); onRefresh(); } catch { }
   };
 
+  const modeColor: Record<string, string> = { ONLINE: '#10b981', OFFLINE: '#f59e0b', HYBRID: '#6366f1' };
+  const modeLabel = (lead.mode || '').toUpperCase();
+  const mc = modeColor[modeLabel] || '#94a3b8';
+
   return (
-    <Card 
-      elevation={0}
-      sx={{ 
-        mb: 2, 
-        borderRadius: 3, 
-        border: 'none',
-        bgcolor: '#ffffff',
-        boxShadow: '0 4px 12px rgba(23, 28, 31, 0.02)',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        position: 'relative',
-        '&:hover': {
-          boxShadow: '0 12px 32px rgba(23, 28, 31, 0.06)',
-          transform: 'translateY(-4px)',
-          '& .MuiTypography-subtitle2': {
-            color: 'primary.main'
-          }
-        }
-      }}
+    <Box
       onClick={() => navigate(`/class-leads/${lead.id}`)}
+      sx={{
+        mb: 1.25,
+        borderRadius: '12px',
+        border: '1px solid #E2E8F0',
+        bgcolor: '#fff',
+        cursor: 'pointer',
+        overflow: 'hidden',
+        transition: 'border-color 160ms cubic-bezier(0.23,1,0.32,1), transform 160ms cubic-bezier(0.23,1,0.32,1), box-shadow 160ms cubic-bezier(0.23,1,0.32,1)',
+        '@keyframes cardSlideIn': {
+          from: { opacity: 0, transform: 'translateY(8px)' },
+          to: { opacity: 1, transform: 'translateY(0)' },
+        },
+        animation: `cardSlideIn 260ms cubic-bezier(0.23,1,0.32,1) ${delay}ms both`,
+        '@media (prefers-reduced-motion: reduce)': { animation: 'none', opacity: 1 },
+        '@media (hover: hover) and (pointer: fine)': {
+          '&:hover': { borderColor: '#CBD5E1', transform: 'translateY(-2px)', boxShadow: '0 4px 12px rgba(0,0,0,0.07)' },
+        },
+        '@media (hover: none)': { '&:active': { transform: 'scale(0.97)' } },
+      }}
     >
-      <CardContent sx={{ p: '16px !important' }}>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
-          <Box display="flex" alignItems="center" gap={1.5}>
-            <Avatar 
-              sx={{ 
-                width: 32, 
-                height: 32, 
-                fontSize: '0.8rem', 
-                fontWeight: 700,
-                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                color: 'primary.main',
-                border: '2px solid',
-                borderColor: alpha(theme.palette.primary.main, 0.2)
+      {/* Color accent strip based on priority */}
+      {priority && <Box sx={{ height: 3, bgcolor: priority.color, borderRadius: '12px 12px 0 0' }} />}
+
+      <Box sx={{ p: 1.5 }}>
+        {/* Header row: avatar + name + menu */}
+        <Box display="flex" alignItems="flex-start" gap={1} mb={1}>
+          <Avatar
+            sx={{
+              width: 32, height: 32, borderRadius: '9px',
+              bgcolor: alpha(ac, 0.12), color: ac,
+              fontSize: '0.68rem', fontWeight: 800, flexShrink: 0, mt: 0.1,
+            }}
+          >
+            {getInitials(lead.studentName || '?')}
+          </Avatar>
+          <Box flex={1} minWidth={0}>
+            <Typography
+              fontWeight={700}
+              sx={{
+                fontSize: '0.82rem', lineHeight: 1.3, color: '#1e293b',
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                wordBreak: 'break-word',
               }}
             >
-              {(lead.studentName || 'Student').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-            </Avatar>
-            <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
-              <Typography 
-                variant="subtitle2" 
-                fontWeight={700} 
-                color="primary.main" 
-                sx={{ 
-                  cursor: 'pointer',
-                  transition: 'color 0.2s',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.1,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: '100%'
-                }} 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/class-leads/${lead.id}`);
-                }}
-              >
-                {lead.studentName}
-              </Typography>
-               <Box display="flex" alignItems="center" gap={1}>
-                <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 600, fontSize: '0.65rem' }}>
-                  {getDaysInStage(lead.createdAt)}
-                </Typography>
-                {isAdmin && (lead as any).createdBy?.name && (
-                  <Chip 
-                    label={`Mgr: ${(lead as any).createdBy.name}`}
-                    size="small"
-                    sx={{ 
-                      height: 16, 
-                      fontSize: '0.6rem', 
-                      fontWeight: 700,
-                      bgcolor: alpha(theme.palette.secondary.main, 0.1),
-                      color: 'secondary.main',
-                      border: 'none',
-                      '& .MuiChip-label': { px: 0.5 }
-                    }}
-                  />
-                )}
-               </Box>
-            </Box>
+              {lead.studentName}
+            </Typography>
+            <Typography sx={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 600, mt: 0.1 }}>
+              {getDaysLabel(lead.createdAt)}
+              {isAdmin && (lead as any).createdBy?.name && (
+                <Box component="span" sx={{ ml: 0.75, color: '#64748b', fontWeight: 700, bgcolor: '#F1F5F9', px: 0.5, py: 0.1, borderRadius: '4px', fontSize: '0.58rem' }}>
+                  {(lead as any).createdBy.name}
+                </Box>
+              )}
+            </Typography>
           </Box>
-          <IconButton 
-            size="small" 
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-              event.stopPropagation();
-              handleMenuClick(event);
-            }} 
-            sx={{ mt: -0.5, mr: -0.5 }}
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+            sx={{ flexShrink: 0, color: '#cbd5e1', borderRadius: '7px', width: 24, height: 24, mt: 0.1, '&:active': { transform: 'scale(0.88)' }, '&:hover': { color: '#64748b', bgcolor: '#F8FAFC' } }}
           >
-            <MoreVertIcon fontSize="small" />
+            <MoreVertIcon sx={{ fontSize: 15 }} />
           </IconButton>
-          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-            <MenuItem onClick={() => navigate(`/class-leads/${lead.id}`)}>View Details</MenuItem>
-            <Divider />
-            <MenuItem onClick={() => handleMoveTo('ANNOUNCED')}>Move to Announced</MenuItem>
-            <MenuItem onClick={() => handleMoveTo('DEMO_SCHEDULED')}>Move to Scheduled</MenuItem>
-            <MenuItem onClick={() => handleMoveTo('CONVERTED')}>Move to Won</MenuItem>
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={() => setAnchorEl(null)}
+            onClick={(e) => e.stopPropagation()}
+            PaperProps={{ sx: { borderRadius: '10px', border: '1px solid #F1F5F9', boxShadow: '0 8px 24px rgba(0,0,0,0.09)', minWidth: 180 } }}
+          >
+            <MenuItem onClick={(e) => { e.stopPropagation(); setAnchorEl(null); navigate(`/class-leads/${lead.id}`); }} sx={{ fontSize: '0.82rem', fontWeight: 600, gap: 1, borderRadius: '7px', mx: 0.5 }}>
+              View Details
+            </MenuItem>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem onClick={() => handleMoveTo('ANNOUNCED')} sx={{ fontSize: '0.82rem', fontWeight: 600, borderRadius: '7px', mx: 0.5 }}>Move → Announced</MenuItem>
+            <MenuItem onClick={() => handleMoveTo('DEMO_SCHEDULED')} sx={{ fontSize: '0.82rem', fontWeight: 600, borderRadius: '7px', mx: 0.5 }}>Move → Demo Scheduled</MenuItem>
+            <MenuItem onClick={() => handleMoveTo('CONVERTED')} sx={{ fontSize: '0.82rem', fontWeight: 600, borderRadius: '7px', mx: 0.5 }}>Move → Won</MenuItem>
             {isAdmin && (
               <>
-                <Divider />
-                <MenuItem onClick={(e) => { e.stopPropagation(); onReassign(lead); handleMenuClose(); }}>
-                  Reassign Manager
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem onClick={(e) => { e.stopPropagation(); setAnchorEl(null); onReassign(lead); }} sx={{ fontSize: '0.82rem', fontWeight: 600, gap: 1, color: '#6366f1', borderRadius: '7px', mx: 0.5 }}>
+                  <SwapHorizIcon sx={{ fontSize: 15 }} /> Reassign
                 </MenuItem>
               </>
             )}
           </Menu>
         </Box>
 
-        <Box display="flex" gap={0.5} flexWrap="wrap" mb={1.5}>
-          {getPriority(lead.createdAt).icon && (
-            <Tooltip title={getPriority(lead.createdAt).label}>
-              <Chip 
-                label="Prio"
-                size="small"
-                sx={{ 
-                  height: 22, 
-                  fontSize: '0.7rem', 
-                  fontWeight: 800,
-                  bgcolor: getPriority(lead.createdAt).bg,
-                  color: getPriority(lead.createdAt).color,
-                  border: 'none',
-                  '& .MuiChip-label': { px: 1 }
-                }}
-              />
-            </Tooltip>
+        {/* Chips row: grade + subjects */}
+        <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
+          {lead.grade && (
+            <Box sx={{ px: 0.75, py: 0.25, borderRadius: '6px', bgcolor: alpha('#6366f1', 0.08) }}>
+              <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#6366f1', lineHeight: 1 }}>Gr. {lead.grade}</Typography>
+            </Box>
           )}
-          {(Array.isArray(lead.subject) ? lead.subject : (lead.subject ? [lead.subject] : [])).map((s: any, idx: number) => {
-            const label = typeof s === 'string' ? s : s?.label || s?.name || 'N/A';
-            return (
-              <Chip 
-                key={`${lead.id}-subj-${idx}`} 
-                label={label} 
-                size="small" 
-                sx={{ 
-                  height: 22, 
-                  fontSize: '0.7rem', 
-                  fontWeight: 600,
-                  bgcolor: alpha(theme.palette.primary.main, 0.05),
-                  color: 'primary.main',
-                  border: 'none'
-                }} 
-              />
-            );
-          }).slice(0, 3)}
-          <Chip 
-            label={lead.grade} 
-            size="small" 
-            sx={{ 
-              height: 22, 
-              fontSize: '0.7rem', 
-              fontWeight: 600,
-              bgcolor: 'primary.main', 
-              color: 'white',
-              border: 'none'
-            }} 
-          />
+          {subjects.slice(0, 2).map((s) => (
+            <Box key={s} sx={{ px: 0.75, py: 0.25, borderRadius: '6px', bgcolor: '#F1F5F9' }}>
+              <Typography sx={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569', lineHeight: 1 }}>{s}</Typography>
+            </Box>
+          ))}
         </Box>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
-          <Box display="flex" alignItems="center" color="text.secondary">
-            <SchoolIcon sx={{ fontSize: 13, mr: 0.5, color: 'text.disabled' }} />
-            <Typography variant="caption" fontWeight={500} sx={{ fontSize: '0.65rem' }}>{lead.mode}</Typography>
+        {/* Footer: mode badge + date + interests */}
+        <Box display="flex" alignItems="center" justifyContent="space-between" pt={0.75} sx={{ borderTop: '1px solid #F8FAFC' }}>
+          <Box sx={{ px: 0.75, py: 0.25, borderRadius: '6px', bgcolor: alpha(mc, 0.08) }}>
+            <Typography sx={{ fontSize: '0.62rem', fontWeight: 700, color: mc, lineHeight: 1 }}>{modeLabel || 'N/A'}</Typography>
           </Box>
-          <Box display="flex" alignItems="center" color="text.secondary">
-            <AccessTimeIcon sx={{ fontSize: 13, mr: 0.5, color: 'text.disabled' }} />
-            <Typography variant="caption" fontWeight={500} sx={{ fontSize: '0.65rem' }}>{lead.timing}</Typography>
-          </Box>
-          <Box display="flex" alignItems="center" color="text.secondary">
-            <PersonIcon sx={{ fontSize: 13, mr: 0.5, color: 'text.disabled' }} />
-            <Typography variant="caption" fontWeight={500} sx={{ fontSize: '0.65rem' }}>#{lead.leadId || lead.id.slice(-6).toUpperCase()}</Typography>
-          </Box>
-        </Box>
-
-        <Box mt={2} pt={1.5} borderTop="1px solid" borderColor="divider" display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.disabled', letterSpacing: 0.5 }}>
-            {format(new Date(lead.createdAt), 'MMM dd, yyyy').toUpperCase()}
+          <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: '#cbd5e1' }}>
+            {format(new Date(lead.createdAt), 'MMM d')}
           </Typography>
           {(lead as any).interestCount > 0 && (
-             <Tooltip title={`${(lead as any).interestCount} Tutors Interested`}>
-                <Chip 
-                  label={`${(lead as any).interestCount} Interests`} 
-                  size="small" 
-                  sx={{ 
-                    height: 24, 
-                    fontSize: '0.7rem', 
-                    fontWeight: 700,
-                    bgcolor: alpha(theme.palette.secondary.main, 0.1),
-                    color: 'secondary.main',
-                    border: '1px solid',
-                    borderColor: alpha(theme.palette.secondary.main, 0.2)
-                  }}
-                />
-             </Tooltip>
+            <Box sx={{ px: 0.75, py: 0.25, borderRadius: '6px', bgcolor: alpha('#8b5cf6', 0.08) }}>
+              <Typography sx={{ fontSize: '0.62rem', fontWeight: 700, color: '#8b5cf6', lineHeight: 1 }}>
+                {(lead as any).interestCount} 🙋
+              </Typography>
+            </Box>
           )}
         </Box>
-      </CardContent>
-    </Card>
+      </Box>
+    </Box>
   );
 };
 
+// ── Kanban column ─────────────────────────────────────────────────────────────
+const KanbanColumn: React.FC<{
+  col: typeof COLUMN_CONFIG[0];
+  leads: IClassLead[];
+  highlighted: boolean;
+  colIndex: number;
+  managers: { id: string; name: string }[];
+  onRefresh: () => void;
+  onReassign: (lead: IClassLead) => void;
+}> = ({ col, leads, highlighted, colIndex, managers, onRefresh, onReassign }) => (
+  <Box
+    sx={{
+      minWidth: { xs: 248, sm: 272, md: 290 },
+      width: { xl: 'calc((100% - 48px) / 7)' },
+      flexShrink: 0,
+      scrollSnapAlign: 'start',
+      display: 'flex',
+      flexDirection: 'column',
+      '@keyframes colIn': { from: { opacity: 0, transform: 'translateY(12px)' }, to: { opacity: 1, transform: 'translateY(0)' } },
+      animation: `colIn 320ms cubic-bezier(0.23,1,0.32,1) ${colIndex * 50}ms both`,
+      '@media (prefers-reduced-motion: reduce)': { animation: 'none', opacity: 1 },
+    }}
+  >
+    <Box
+      sx={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: highlighted ? '#F0F4FF' : '#F8FAFC',
+        borderRadius: '14px',
+        border: '1px solid',
+        borderColor: highlighted ? alpha(col.color, 0.25) : '#E2E8F0',
+        overflow: 'hidden',
+        transition: 'border-color 200ms ease',
+      }}
+    >
+      {/* Column header with top accent */}
+      <Box sx={{ borderTop: `3px solid ${col.color}`, px: 1.5, pt: 1.5, pb: 1.25 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Box>
+            <Typography fontWeight={800} sx={{ fontSize: '0.82rem', color: '#1e293b', lineHeight: 1.2 }}>
+              {col.label}
+            </Typography>
+            <Typography sx={{ fontSize: '0.62rem', color: '#94a3b8', mt: 0.1, fontWeight: 500 }}>
+              {col.description}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              minWidth: 24, height: 22, px: 0.75,
+              borderRadius: '7px',
+              bgcolor: alpha(col.color, 0.1),
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Typography sx={{ fontSize: '0.7rem', fontWeight: 800, color: col.color }}>{leads.length}</Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Cards scroll area */}
+      <Box
+        sx={{
+          flex: 1,
+          px: 1.25,
+          pb: 1.25,
+          pt: 0.75,
+          overflowY: 'auto',
+          maxHeight: 620,
+          '&::-webkit-scrollbar': { width: 4 },
+          '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.08)', borderRadius: 10 },
+        }}
+      >
+        {leads.length === 0 ? (
+          <Box sx={{ py: 6, textAlign: 'center', opacity: 0.35 }}>
+            <LeadIcon sx={{ fontSize: 36, color: '#94a3b8', mb: 0.75 }} />
+            <Typography sx={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8' }}>No leads here</Typography>
+          </Box>
+        ) : (
+          leads.map((lead, i) => (
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              delay={colIndex * 40 + Math.min(i * 30, 180)}
+              managers={managers}
+              onRefresh={onRefresh}
+              onReassign={onReassign}
+            />
+          ))
+        )}
+      </Box>
+    </Box>
+  </Box>
+);
+
+// ── Board component ───────────────────────────────────────────────────────────
 export const ManagerLeadCRMBoard: React.FC<{ showHeader?: boolean; showBackground?: boolean }> = ({
   showHeader = true,
   showBackground = true,
 }) => {
   const theme = useTheme();
-  const isLargeScreen = useMediaQuery(theme.breakpoints.up('lg'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const user = useSelector(selectCurrentUser);
   const isAdmin = user?.role === USER_ROLES.ADMIN;
   const navigate = useNavigate();
@@ -352,10 +318,9 @@ export const ManagerLeadCRMBoard: React.FC<{ showHeader?: boolean; showBackgroun
   const highlightColumnRaw = searchParams.get('column');
   const highlightColumn = highlightColumnRaw === 'demoPending' ? 'demoCompleted' : highlightColumnRaw;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
+
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
-  
   const [groups, setGroups] = useState<Record<string, IClassLead[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -364,42 +329,32 @@ export const ManagerLeadCRMBoard: React.FC<{ showHeader?: boolean; showBackgroun
   const [gradeFilter, setGradeFilter] = useState<string>('All');
   const [subjectFilter, setSubjectFilter] = useState<string>('All');
   const [managerFilter, setManagerFilter] = useState<string>('All');
-  const [managers, setManagers] = useState<{ id: string, name: string }[]>([]);
+  const [managers, setManagers] = useState<{ id: string; name: string }[]>([]);
   const [availableGrades, setAvailableGrades] = useState<string[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
-  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [reassignOpen, setReassignOpen] = useState(false);
   const [leadToReassign, setLeadToReassign] = useState<IClassLead | null>(null);
-  const [selectedManagerId, setSelectedManagerId] = useState<string>('');
+  const [selectedManagerId, setSelectedManagerId] = useState('');
   const [reassigning, setReassigning] = useState(false);
 
   const fetchFilters = async () => {
     try {
       const res = await getLeadFilterOptions();
-      if (res.data) {
-        if (res.data.managers) setManagers(res.data.managers);
-        if (res.data.grades) setAvailableGrades(res.data.grades);
-        if (res.data.subjects) setAvailableSubjects(res.data.subjects);
-      }
-    } catch (err) {
-      console.error('Failed to fetch filters', err);
-    }
+      if (res.data?.managers) setManagers(res.data.managers);
+      if (res.data?.grades) setAvailableGrades(res.data.grades);
+      if (res.data?.subjects) setAvailableSubjects(res.data.subjects);
+    } catch { }
   };
 
   const fetchLeads = async () => {
     setLoading(true);
     try {
-      const managerId = managerFilter !== 'All' ? managerFilter : undefined;
-      const res = await getCRMLeads(managerId);
-      const raw = (res as any)?.data || {};
-      
-      const normalized: Record<string, IClassLead[]> = { ...raw };
-      
-      // Map demoPending (backend) to demoCompleted (frontend label) if needed
-      if (normalized.demoPending) {
-        normalized.demoCompleted = normalized.demoPending;
-      }
-      
-      setGroups(normalized);
+      const res = await getCRMLeads(managerFilter !== 'All' ? managerFilter : undefined);
+      const raw: Record<string, IClassLead[]> = (res as any)?.data || {};
+      if (raw.demoPending) raw.demoCompleted = raw.demoPending;
+      setGroups(raw);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to fetch CRM data');
     } finally {
@@ -407,20 +362,14 @@ export const ManagerLeadCRMBoard: React.FC<{ showHeader?: boolean; showBackgroun
     }
   };
 
-  useEffect(() => {
-    fetchFilters();
-  }, []);
-
-  useEffect(() => {
-    fetchLeads();
-  }, [managerFilter]);
+  useEffect(() => { fetchFilters(); }, []);
+  useEffect(() => { fetchLeads(); }, [managerFilter]);
 
   const handleScroll = () => {
-    if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-      setShowLeftArrow(scrollLeft > 20);
-      setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 20);
-    }
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+    setShowLeftArrow(scrollLeft > 20);
+    setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 20);
   };
 
   useEffect(() => {
@@ -429,54 +378,33 @@ export const ManagerLeadCRMBoard: React.FC<{ showHeader?: boolean; showBackgroun
     return () => window.removeEventListener('resize', handleScroll);
   }, [groups]);
 
-  const scrollBoard = (direction: 'left' | 'right') => {
-    if (scrollContainerRef.current) {
-      const scrollAmount = direction === 'left' ? -400 : 400;
-      scrollContainerRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
-  };
+  const scrollBoard = (dir: 'left' | 'right') =>
+    scrollContainerRef.current?.scrollBy({ left: dir === 'left' ? -320 : 320, behavior: 'smooth' });
 
-  const getFilteredLeads = (columnKey: string) => {
-    const leads = (groups[columnKey] || []).filter(l => !!l && typeof l === 'object');
-    const sQuery = (searchQuery || '').toLowerCase();
-    
-    return leads.filter(lead => {
-      const studentName = lead.studentName || '';
-      const leadId = lead.leadId || '';
-      const id = lead.id || '';
-      const creatorName = (lead as any).createdBy?.name || '';
-
-      const matchesSearch = 
-        studentName.toLowerCase().includes(sQuery) ||
-        leadId.toLowerCase().includes(sQuery) ||
-        id.toLowerCase().includes(sQuery) ||
-        creatorName.toLowerCase().includes(sQuery);
-      
-      const matchesGrade = gradeFilter === 'All' || lead.grade === gradeFilter;
-      
-      const matchesSubject = subjectFilter === 'All' || 
-        (Array.isArray(lead.subject) 
-          ? (lead.subject as string[]).some(s => s === subjectFilter)
-          : lead.subject === subjectFilter);
-
-      return matchesSearch && matchesGrade && matchesSubject;
+  const getFilteredLeads = (key: string) => {
+    const sq = searchQuery.toLowerCase();
+    return (groups[key] || []).filter((lead) => {
+      if (!lead || typeof lead !== 'object') return false;
+      const matchSearch = !sq ||
+        (lead.studentName || '').toLowerCase().includes(sq) ||
+        (lead.leadId || '').toLowerCase().includes(sq) ||
+        (lead.id || '').toLowerCase().includes(sq) ||
+        ((lead as any).createdBy?.name || '').toLowerCase().includes(sq);
+      const matchGrade = gradeFilter === 'All' || lead.grade === gradeFilter;
+      const matchSubject = subjectFilter === 'All' ||
+        (Array.isArray(lead.subject) ? (lead.subject as string[]).some(s => s === subjectFilter) : lead.subject === subjectFilter);
+      return matchSearch && matchGrade && matchSubject;
     });
   };
 
-  const allGrades = Array.from(new Set(['All', ...availableGrades]));
-  const allSubjects = Array.from(new Set(['All', ...availableSubjects]));
+  const totalLeads = useMemo(() => COLUMN_CONFIG.reduce((s, col) => s + (groups[col.key]?.length || 0), 0), [groups]);
+  const activeFilters = (gradeFilter !== 'All' ? 1 : 0) + (subjectFilter !== 'All' ? 1 : 0) + (managerFilter !== 'All' ? 1 : 0);
 
   const handleReassignOpen = (lead: IClassLead) => {
     setLeadToReassign(lead);
-    const creatorId = (lead as any).createdBy?._id || (lead as any).createdBy?.id || lead.createdBy;
-    setSelectedManagerId(typeof creatorId === 'string' ? creatorId : '');
-    setReassignModalOpen(true);
-  };
-
-  const handleReassignClose = () => {
-    setReassignModalOpen(false);
-    setLeadToReassign(null);
-    setSelectedManagerId('');
+    const id = (lead as any).createdBy?._id || (lead as any).createdBy?.id || lead.createdBy;
+    setSelectedManagerId(typeof id === 'string' ? id : '');
+    setReassignOpen(true);
   };
 
   const handleReassignSubmit = async () => {
@@ -485,392 +413,302 @@ export const ManagerLeadCRMBoard: React.FC<{ showHeader?: boolean; showBackgroun
     try {
       await reassignLead(leadToReassign.id, selectedManagerId);
       await fetchLeads();
-      handleReassignClose();
-    } catch (err) {
-      console.error('Failed to reassign lead', err);
-    } finally {
-      setReassigning(false);
-    }
+      setReassignOpen(false);
+      setLeadToReassign(null);
+      setSelectedManagerId('');
+    } catch { }
+    finally { setReassigning(false); }
   };
 
-  if (loading && Object.keys(groups).length === 0) return <LoadingSpinner />;
+  if (loading && Object.keys(groups).length === 0) return <LoadingSpinner /> as any;
 
   const body = (
-    <>
-      <Menu
-        anchorEl={null}
-        open={reassignModalOpen}
-        onClose={handleReassignClose}
-        PaperProps={{
-          sx: { p: 2, minWidth: 300, borderRadius: 2 }
-        }}
-        anchorReference="anchorPosition"
-        anchorPosition={{ top: window.innerHeight / 2, left: window.innerWidth / 2 }}
-        transformOrigin={{ vertical: 'center', horizontal: 'center' }}
-      >
-        <Typography variant="subtitle1" fontWeight={700} mb={2}>Reassign Manager</Typography>
-        <Typography variant="body2" color="text.secondary" mb={2}>
-          Select a new manager for <strong>{leadToReassign?.studentName}</strong>:
-        </Typography>
-        <FormControl fullWidth size="small" sx={{ mb: 3 }}>
-          <InputLabel>Target Manager</InputLabel>
-          <Select
-            value={selectedManagerId}
-            label="Target Manager"
-            onChange={(e) => setSelectedManagerId(e.target.value)}
-          >
-            {managers.map((mgr) => (
-              <MenuItem key={mgr.id} value={mgr.id}>{mgr.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Box display="flex" gap={1} justifyContent="flex-end">
-          <Button onClick={handleReassignClose} size="small">Cancel</Button>
-          <Button 
-            variant="contained" 
-            size="small" 
-            disabled={reassigning || !selectedManagerId || selectedManagerId === ((leadToReassign as any)?.createdBy?._id || (leadToReassign as any)?.createdBy?.id || leadToReassign?.createdBy)}
-            onClick={handleReassignSubmit}
-          >
-            {reassigning ? 'Reassigning...' : 'Confirm'}
-          </Button>
-        </Box>
-      </Menu>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#F8FAFC' }}>
 
+      {/* ── Hero header ────────────────────────────────────────────────── */}
       {showHeader && (
-        <Box 
-          sx={{ 
-            bgcolor: 'rgba(255, 255, 255, 0.85)',
-            backdropFilter: 'blur(20px)',
-            borderBottom: '1px solid rgba(196, 197, 218, 0.4)',
-            color: '#171c1f',
-            pt: { xs: 4, md: 5 },
-            pb: { xs: 8, md: 9 },
-            px: { xs: 2, md: 4 },
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+            px: { xs: 2, sm: 4 },
+            pt: { xs: 2, sm: 3 },
+            pb: { xs: 2.5, sm: 3.5 },
             position: 'relative',
             overflow: 'hidden',
-            zIndex: 10
+            '@keyframes heroIn': { from: { opacity: 0, transform: 'translateY(8px)' }, to: { opacity: 1, transform: 'translateY(0)' } },
+            animation: 'heroIn 360ms cubic-bezier(0.23,1,0.32,1) forwards',
+            '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
           }}
         >
-          <Container maxWidth={false} sx={{ position: 'relative', zIndex: 2 }}>
-            <Breadcrumbs 
-              separator={<NavigateNextIcon fontSize="small" />} 
-              sx={{ color: '#434657', mb: 2 }}
-            >
-              <Link 
-                underline="hover" 
-                color="inherit" 
-                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                onClick={() => navigate(isAdmin ? '/admin-dashboard' : '/manager-today-tasks')}
-              >
-                <DashboardIcon sx={{ mr: 0.5, fontSize: 16 }} />
-                Dashboard
-              </Link>
-              <Typography color="primary.main" sx={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}>
-                <LeadIcon sx={{ mr: 0.5, fontSize: 16 }} />
-                Lead CRM
-              </Typography>
-            </Breadcrumbs>
-
-            <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Box sx={{ position: 'relative', zIndex: 1, maxWidth: 1400, mx: 'auto' }}>
+            <Box display="flex" alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" gap={2} flexDirection={{ xs: 'column', sm: 'row' }}>
               <Box>
-                <Typography variant="h4" fontWeight={800} gutterBottom sx={{ letterSpacing: '-0.02em', color: '#171c1f' }}>
+                <Typography fontWeight={800} sx={{ color: '#fff', fontSize: { xs: '1.3rem', sm: '1.65rem' }, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                   Lead Tracker CRM
                 </Typography>
-                <Typography variant="body1" sx={{ color: '#434657', fontWeight: 400, maxWidth: 600 }}>
-                  {isAdmin 
-                    ? "Monitor all manager leads through the CRM funnel to oversee team performance."
-                    : "Manage and track your leads through the sales funnel with real-time interest tracking."}
+                <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontSize: { xs: '0.78rem', sm: '0.88rem' }, mt: 0.4 }}>
+                  {isAdmin
+                    ? 'Monitor all manager leads through the CRM funnel.'
+                    : 'Track your leads through the sales funnel with real-time interest.'}
                 </Typography>
+
+                {/* Stats pills */}
+                <Box display="flex" gap={1} mt={1.25} flexWrap="wrap">
+                  {[{ l: 'Total', v: totalLeads }, ...COLUMN_CONFIG.slice(0, 3).map(c => ({ l: c.label, v: groups[c.key]?.length || 0 }))].map(({ l, v }) => (
+                    <Box key={l} sx={{ px: 1.25, py: 0.4, borderRadius: '8px', bgcolor: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                      <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>{v} <span style={{ fontWeight: 500, opacity: 0.75 }}>{l}</span></Typography>
+                    </Box>
+                  ))}
+                </Box>
               </Box>
-              <Box display="flex" gap={2} alignItems="center">
-                <TextField
-                  placeholder="Search leads..."
-                  size="small"
-                  value={searchQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                  InputProps={{
-                    startAdornment: <SearchIcon sx={{ color: '#747688', mr: 1 }} />,
-                    sx: { 
-                      bgcolor: '#f0f4f8', 
-                      borderRadius: 2,
-                      color: '#171c1f',
-                      width: { xs: 200, md: 300 },
-                      '& fieldset': { 
-                         border: 'none',
-                         borderBottom: '1px solid rgba(196, 197, 218, 0.4)',
-                         borderRadius: '8px 8px 0 0'
-                      },
-                      '&:hover': { bgcolor: '#eaeef2' },
-                      '&.Mui-focused fieldset': { 
-                         borderBottom: '2px solid #0035c5 !important',
-                         boxShadow: '0 2px 8px rgba(0, 53, 197, 0.1)'
-                      }
-                    }
+
+              {/* Search + refresh */}
+              <Box display="flex" gap={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                <Box
+                  sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    bgcolor: 'rgba(255,255,255,0.14)',
+                    border: '1px solid rgba(255,255,255,0.22)',
+                    borderRadius: '10px',
+                    px: 1.25, py: 0.75,
+                    width: { xs: '100%', sm: 220 },
                   }}
-                />
-                <Button 
-                    variant="contained" 
-                    color="primary"
-                    startIcon={<RefreshIcon />} 
-                    onClick={fetchLeads}
-                    disabled={loading}
-                    sx={{ 
-                        px: 3,
-                        py: 1,
-                        height: 40
-                    }}
                 >
-                  {loading ? 'Refreshing...' : 'Refresh Board'}
-                </Button>
+                  <SearchIcon sx={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', flexShrink: 0 }} />
+                  <input
+                    placeholder="Search leads…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      border: 'none', background: 'transparent', outline: 'none',
+                      color: '#fff', fontSize: '0.83rem', fontWeight: 500, width: '100%',
+                    }}
+                  />
+                </Box>
+                <IconButton
+                  onClick={fetchLeads}
+                  disabled={loading}
+                  size="small"
+                  sx={{
+                    bgcolor: 'rgba(255,255,255,0.14)',
+                    border: '1px solid rgba(255,255,255,0.22)',
+                    borderRadius: '10px',
+                    color: '#fff', width: 38, height: 38,
+                    '&:active': { transform: 'scale(0.93)' },
+                    '&:disabled': { opacity: 0.5 },
+                  }}
+                >
+                  <RefreshIcon sx={{ fontSize: 18, ...(loading && { animation: 'spin 1s linear infinite', '@keyframes spin': { from: { transform: 'rotate(0deg)' }, to: { transform: 'rotate(360deg)' } } }) }} />
+                </IconButton>
               </Box>
             </Box>
-          </Container>
+          </Box>
+          {/* Orb */}
+          <Box sx={{ position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
         </Box>
       )}
 
-      <Container maxWidth={false} sx={{ mt: showHeader ? -6 : 0, pb: 4 }}>
-
-        <Box mb={3} display="flex" gap={2} alignItems="center" flexWrap="wrap">
-          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FilterListIcon fontSize="small" />
-            Filters:
-          </Typography>
-          <Box display="flex" gap={1}>
-            <Typography variant="caption" sx={{ color: 'text.disabled', alignSelf: 'center', ml: 1 }}>Grade:</Typography>
-            <Box display="flex" gap={0.5} overflow="auto" sx={{ maxWidth: '40vw', pb: 0.5 }}>
-              {allGrades.slice(0, 8).map(grade => (
-                <Chip 
-                  key={`grade-${grade}`} 
-                  label={grade} 
-                  size="small" 
-                  onClick={() => setGradeFilter(grade)}
-                  sx={{ 
-                    cursor: 'pointer',
-                    bgcolor: gradeFilter === grade ? 'primary.main' : 'white',
-                    color: gradeFilter === grade ? 'white' : 'text.primary',
-                    border: '1px solid',
-                    borderColor: gradeFilter === grade ? 'primary.main' : 'divider',
-                    '&:hover': { bgcolor: gradeFilter === grade ? 'primary.dark' : 'rgba(0,0,0,0.04)' }
-                  }}
-                />
-              ))}
-            </Box>
-          </Box>
-          <Divider orientation="vertical" flexItem sx={{ mx: 1, height: 20, alignSelf: 'center' }} />
-          <Box display="flex" gap={1}>
-            <Typography variant="caption" sx={{ color: 'text.disabled', alignSelf: 'center' }}>Subject:</Typography>
-            <Box display="flex" gap={0.5} overflow="auto" sx={{ maxWidth: '40vw', pb: 0.5 }}>
-              {allSubjects.slice(0, 8).map(subject => (
-                <Chip 
-                  key={`subj-${subject}`} 
-                  label={subject} 
-                  size="small" 
-                  onClick={() => setSubjectFilter(subject)}
-                  sx={{ 
-                    cursor: 'pointer',
-                    bgcolor: subjectFilter === subject ? 'primary.main' : 'white',
-                    color: subjectFilter === subject ? 'white' : 'text.primary',
-                    border: '1px solid',
-                    borderColor: subjectFilter === subject ? 'primary.main' : 'divider',
-                    '&:hover': { bgcolor: subjectFilter === subject ? 'primary.dark' : 'rgba(0,0,0,0.04)' }
-                  }}
-                />
-              ))}
-            </Box>
-          </Box>
-
-        {isAdmin && (
-            <>
-            <Divider orientation="vertical" flexItem sx={{ mx: 1, height: 20, alignSelf: 'center' }} />
-            <Box sx={{ minWidth: 200 }}>
-                <FormControl size="small" fullWidth>
-                    <InputLabel id="manager-select-label">Filter by Manager</InputLabel>
-                    <Select
-                        labelId="manager-select-label"
-                        id="manager-select"
-                        value={managerFilter}
-                        label="Filter by Manager"
-                        onChange={(e) => setManagerFilter(e.target.value)}
-                        sx={{ bgcolor: 'white' }}
-                    >
-                        <MenuItem value="All">All Managers</MenuItem>
-                        {managers.map((mgr) => (
-                            <MenuItem key={mgr.id} value={mgr.id}>
-                                {mgr.name}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-            </Box>
-            </>
-        )}
-        </Box>
-        {error && <Box mb={3}><ErrorAlert error={error} /></Box>}
-
-        <Box sx={{ position: 'relative' }}>
-          {/* Navigation Arrows */}
-          {showLeftArrow && (
-            <IconButton 
-              onClick={() => scrollBoard('left')}
-              sx={{ 
-                position: 'absolute', 
-                left: -20, 
-                top: '50%', 
-                transform: 'translateY(-50%)', 
-                zIndex: 10,
-                bgcolor: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                '&:hover': { bgcolor: 'white', transform: 'translateY(-50%) scale(1.1)' }
-              }}
-            >
-              <ChevronLeftIcon />
-            </IconButton>
-          )}
-
-          {showRightArrow && (
-            <IconButton 
-              onClick={() => scrollBoard('right')}
-              sx={{ 
-                position: 'absolute', 
-                right: -20, 
-                top: '50%', 
-                transform: 'translateY(-50%)', 
-                zIndex: 10,
-                bgcolor: 'white',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                '&:hover': { bgcolor: 'white', transform: 'translateY(-50%) scale(1.1)' }
-              }}
-            >
-              <ChevronRightIcon />
-            </IconButton>
-          )}
-
-        <Grid 
-          container 
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          spacing={2} 
-          sx={{ 
-            flexWrap: 'nowrap', 
-            overflowX: 'auto', 
-            pb: 2, 
-            minHeight: 700,
-            scrollSnapType: isLargeScreen ? 'none' : 'x mandatory',
-            msOverflowStyle: 'none',
-            scrollbarWidth: 'none',
-            '&::-webkit-scrollbar': {
-              display: 'none'
-            }
-          }}
-        >
-          {COLUMN_CONFIG.map((col) => (
-            <Grid 
-              item 
-              key={col.key} 
-              sx={{ 
-                minWidth: { xs: 280, sm: 300, md: 320, xl: '16.66%' },
-                width: { xl: 'calc(100% / 6)' },
-                flexShrink: 0,
-                flexGrow: 1,
-                scrollSnapAlign: 'start'
-              }}
-            >
-              <Paper 
-                elevation={0}
-                sx={{ 
-                  height: '100%', 
-                  bgcolor: highlightColumn === col.key ? '#e4e9ed' : '#eaeef2', 
-                  borderRadius: 4, 
-                  border: 'none', 
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  transition: 'all 0.3s',
-                  position: 'relative',
-                  overflow: 'hidden'
+      {/* ── Filter bar ─────────────────────────────────────────────────── */}
+      <Box sx={{ bgcolor: '#fff', borderBottom: '1px solid #E2E8F0', px: { xs: 2, sm: 4 }, py: 1, maxWidth: 1400, mx: 'auto' }}>
+        {isMobile ? (
+          // Mobile: collapsed filter
+          <Box>
+            <Box display="flex" alignItems="center" gap={1}>
+              <Button
+                size="small"
+                startIcon={<FilterListIcon sx={{ fontSize: 15 }} />}
+                endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 15, transform: filtersOpen ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }} />}
+                onClick={() => setFiltersOpen(!filtersOpen)}
+                variant="outlined"
+                sx={{
+                  borderRadius: '8px', fontWeight: 700, fontSize: '0.78rem',
+                  borderColor: activeFilters > 0 ? '#6366f1' : '#E2E8F0',
+                  color: activeFilters > 0 ? '#6366f1' : '#64748b',
+                  bgcolor: activeFilters > 0 ? alpha('#6366f1', 0.05) : 'transparent',
+                  textTransform: 'none', py: 0.5,
                 }}
               >
-                <Box p={1.75} sx={{ position: 'relative' }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={800} display="flex" alignItems="center" gap={1} sx={{ color: 'text.primary', fontSize: '0.875rem' }}>
-                        <Box sx={{ width: 10, height: 10, borderRadius: 2, bgcolor: col.color, boxShadow: `0 0 8px ${alpha(col.color, 0.5)}` }} />
-                        {col.label}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, display: 'block', fontWeight: 500, fontSize: '0.65rem' }}>
-                        {col.description}
-                      </Typography>
-                    </Box>
-                    <Chip 
-                      label={getFilteredLeads(col.key).length} 
-                      size="small" 
-                      sx={{ 
-                        bgcolor: alpha(col.color, 0.1), 
-                        color: col.color, 
-                        fontWeight: 800,
-                        height: 20,
-                        fontSize: '0.7rem',
-                        borderRadius: 1,
-                        px: 0.5
-                      }} 
-                    />
-                  </Box>
-                  <Box 
-                    sx={{ 
-                      position: 'absolute', 
-                      bottom: 0, 
-                      left: 0, 
-                      width: '100%', 
-                      height: 3, 
-                      bgcolor: alpha(col.color, 0.2),
-                      borderRadius: '0 0 0 0'
-                    }} 
-                  />
-                </Box>
-                
-                <Box p={2} sx={{ flexGrow: 1, maxHeight: 650, overflowY: 'auto', '&::-webkit-scrollbar': { width: 6 }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.05)', borderRadius: 10 } }}>
-                  {getFilteredLeads(col.key).length === 0 ? (
-                    <Box sx={{ py: 8, textAlign: 'center', opacity: 0.4 }}>
-                      <LeadIcon sx={{ fontSize: 48, mb: 1, color: 'text.disabled' }} />
-                      <Typography variant="body2" fontWeight={500}>
-                        {groups[col.key]?.length === 0 ? 'No leads in this stage' : 'No matching leads'}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    getFilteredLeads(col.key).map((lead) => (
-                      <LeadCard 
-                        key={lead.id} 
-                        lead={lead} 
-                        managers={managers}
-                        onRefresh={fetchLeads} 
-                        onReassign={handleReassignOpen}
+                Filters {activeFilters > 0 && `(${activeFilters})`}
+              </Button>
+              {gradeFilter !== 'All' && (
+                <Chip size="small" label={gradeFilter} onDelete={() => setGradeFilter('All')} sx={{ borderRadius: '7px', fontWeight: 700, fontSize: '0.7rem' }} />
+              )}
+              {subjectFilter !== 'All' && (
+                <Chip size="small" label={subjectFilter} onDelete={() => setSubjectFilter('All')} sx={{ borderRadius: '7px', fontWeight: 700, fontSize: '0.7rem' }} />
+              )}
+            </Box>
+            <Collapse in={filtersOpen}>
+              <Box pt={1.5} pb={0.5} display="flex" flexDirection="column" gap={1.25}>
+                <Box>
+                  <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.75 }}>Grade</Typography>
+                  <Box display="flex" gap={0.5} flexWrap="wrap">
+                    {['All', ...availableGrades].map(g => (
+                      <Chip key={g} label={g} size="small" onClick={() => setGradeFilter(g)}
+                        sx={{ borderRadius: '7px', fontWeight: gradeFilter === g ? 700 : 500, fontSize: '0.7rem', cursor: 'pointer', bgcolor: gradeFilter === g ? '#6366f1' : '#F8FAFC', color: gradeFilter === g ? '#fff' : '#475569', border: '1px solid', borderColor: gradeFilter === g ? '#6366f1' : '#E2E8F0', '&:active': { transform: 'scale(0.95)' } }}
                       />
-                    ))
-                  )}
+                    ))}
+                  </Box>
                 </Box>
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
+                <Box>
+                  <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.75 }}>Subject</Typography>
+                  <Box display="flex" gap={0.5} flexWrap="wrap">
+                    {['All', ...availableSubjects].slice(0, 10).map(s => (
+                      <Chip key={s} label={s} size="small" onClick={() => setSubjectFilter(s)}
+                        sx={{ borderRadius: '7px', fontWeight: subjectFilter === s ? 700 : 500, fontSize: '0.7rem', cursor: 'pointer', bgcolor: subjectFilter === s ? '#6366f1' : '#F8FAFC', color: subjectFilter === s ? '#fff' : '#475569', border: '1px solid', borderColor: subjectFilter === s ? '#6366f1' : '#E2E8F0', '&:active': { transform: 'scale(0.95)' } }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+                {isAdmin && (
+                  <FormControl size="small" sx={{ maxWidth: 240 }}>
+                    <InputLabel>Manager</InputLabel>
+                    <Select value={managerFilter} label="Manager" onChange={(e) => setManagerFilter(e.target.value)} sx={{ borderRadius: '9px' }}>
+                      <MenuItem value="All">All Managers</MenuItem>
+                      {managers.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                )}
+              </Box>
+            </Collapse>
+          </Box>
+        ) : (
+          // Desktop: inline filter row
+          <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <FilterListIcon sx={{ fontSize: 15, color: '#94a3b8' }} />
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>Grade:</Typography>
+              <Box display="flex" gap={0.5} flexWrap="wrap">
+                {['All', ...availableGrades].map(g => (
+                  <Chip key={g} label={g} size="small" onClick={() => setGradeFilter(g)}
+                    sx={{ borderRadius: '7px', fontWeight: gradeFilter === g ? 700 : 500, fontSize: '0.7rem', cursor: 'pointer', bgcolor: gradeFilter === g ? '#6366f1' : '#F8FAFC', color: gradeFilter === g ? '#fff' : '#475569', border: '1px solid', borderColor: gradeFilter === g ? '#6366f1' : '#E2E8F0', '&:active': { transform: 'scale(0.95)' } }}
+                  />
+                ))}
+              </Box>
+            </Box>
+            <Box sx={{ width: '1px', height: 16, bgcolor: '#E2E8F0' }} />
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>Subject:</Typography>
+              <Box display="flex" gap={0.5} flexWrap="wrap">
+                {['All', ...availableSubjects].slice(0, 8).map(s => (
+                  <Chip key={s} label={s} size="small" onClick={() => setSubjectFilter(s)}
+                    sx={{ borderRadius: '7px', fontWeight: subjectFilter === s ? 700 : 500, fontSize: '0.7rem', cursor: 'pointer', bgcolor: subjectFilter === s ? '#6366f1' : '#F8FAFC', color: subjectFilter === s ? '#fff' : '#475569', border: '1px solid', borderColor: subjectFilter === s ? '#6366f1' : '#E2E8F0', '&:active': { transform: 'scale(0.95)' } }}
+                  />
+                ))}
+              </Box>
+            </Box>
+            {isAdmin && (
+              <>
+                <Box sx={{ width: '1px', height: 16, bgcolor: '#E2E8F0' }} />
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel>Manager</InputLabel>
+                  <Select value={managerFilter} label="Manager" onChange={(e) => setManagerFilter(e.target.value)} sx={{ borderRadius: '9px', fontSize: '0.82rem' }}>
+                    <MenuItem value="All">All Managers</MenuItem>
+                    {managers.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
+
+      {/* ── Board ──────────────────────────────────────────────────────── */}
+      <Box sx={{ px: { xs: 1.5, sm: 3 }, py: 2, maxWidth: 1400, mx: 'auto' }}>
+        {error && <Box mb={2}><ErrorAlert error={error} /></Box>}
+
+        <Box sx={{ position: 'relative' }}>
+          {/* Left/right fade scroll hints */}
+          {showLeftArrow && (
+            <Box sx={{
+              position: 'absolute', left: 0, top: 0, bottom: 16, width: 48, zIndex: 5, pointerEvents: 'none',
+              background: 'linear-gradient(to right, #F8FAFC 0%, transparent 100%)',
+            }} />
+          )}
+          {showRightArrow && (
+            <Box sx={{
+              position: 'absolute', right: 0, top: 0, bottom: 16, width: 56, zIndex: 5, pointerEvents: 'none',
+              background: 'linear-gradient(to left, #F8FAFC 0%, transparent 100%)',
+            }} />
+          )}
+
+          {/* Scroll arrows (desktop only) */}
+          {showLeftArrow && !isMobile && (
+            <IconButton onClick={() => scrollBoard('left')}
+              sx={{ position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, bgcolor: '#fff', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.07)', borderRadius: '10px', '&:hover': { bgcolor: '#F8FAFC' } }}>
+              <ChevronLeftIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          )}
+          {showRightArrow && !isMobile && (
+            <IconButton onClick={() => scrollBoard('right')}
+              sx={{ position: 'absolute', right: -16, top: '50%', transform: 'translateY(-50%)', zIndex: 10, bgcolor: '#fff', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.07)', borderRadius: '10px', '&:hover': { bgcolor: '#F8FAFC' } }}>
+              <ChevronRightIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          )}
+
+          <Box
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            sx={{
+              display: 'flex',
+              gap: 1.5,
+              overflowX: 'auto',
+              pb: 2,
+              scrollSnapType: 'x mandatory',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+              alignItems: 'flex-start',
+            }}
+          >
+            {COLUMN_CONFIG.map((col, i) => (
+              <KanbanColumn
+                key={col.key}
+                col={col}
+                leads={getFilteredLeads(col.key)}
+                highlighted={highlightColumn === col.key}
+                colIndex={i}
+                managers={managers}
+                onRefresh={fetchLeads}
+                onReassign={handleReassignOpen}
+              />
+            ))}
+          </Box>
         </Box>
-      </Container>
-    </>
+      </Box>
+
+      {/* ── Reassign dialog ─────────────────────────────────────────────── */}
+      <Dialog open={reassignOpen} onClose={() => setReassignOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: '16px' } }}>
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Reassign Manager</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Select a new manager for <strong>{leadToReassign?.studentName}</strong>:
+          </Typography>
+          <FormControl fullWidth size="small">
+            <InputLabel>Target Manager</InputLabel>
+            <Select value={selectedManagerId} label="Target Manager" onChange={(e) => setSelectedManagerId(e.target.value)}>
+              {managers.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => setReassignOpen(false)} sx={{ borderRadius: '9px', fontWeight: 600 }}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={reassigning || !selectedManagerId}
+            onClick={handleReassignSubmit}
+            disableElevation
+            sx={{ borderRadius: '9px', fontWeight: 700, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}
+          >
+            {reassigning ? 'Reassigning…' : 'Confirm'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 
-  if (!showBackground) {
-    return body;
-  }
-
-  return <Box sx={{ minHeight: '100vh', bgcolor: '#F1F5F9' }}>{body}</Box>;
+  return body;
 };
 
-const ManagerLeadCRMPage: React.FC = () => {
-  return (
-    <ThemeProvider theme={managerTheme}>
-      <ManagerLeadCRMBoard showHeader showBackground />
-    </ThemeProvider>
-  );
-};
+const ManagerLeadCRMPage: React.FC = () => <ManagerLeadCRMBoard showHeader showBackground />;
 
 export default ManagerLeadCRMPage;
-
