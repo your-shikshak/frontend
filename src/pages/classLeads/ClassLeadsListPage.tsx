@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import useAuth from '../../hooks/useAuth';
 import useClassLeads from '../../hooks/useClassLeads';
 import { usePermissionCheck } from '../../hooks/useManagerPermissions';
-import { getLeadFilterOptions } from '../../services/leadService';
+import { getLeadFilterOptions, getClassLeads } from '../../services/leadService';
 import { getSubjects } from '../../services/tutorService';
 import ClassLeadStatusChip from '../../components/classLeads/ClassLeadStatusChip';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -312,6 +312,13 @@ export default function ClassLeadsListPage() {
   const isAdmin = user?.role === 'ADMIN';
   const { isAuthorized: canCreateLeads } = usePermissionCheck('canCreateLeads');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [siteLeadsCount, setSiteLeadsCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    getClassLeads({ leadSource: 'SITE', limit: 1, page: 1 })
+      .then((res) => setSiteLeadsCount((res as any).pagination?.total ?? (res as any).total ?? null))
+      .catch(() => setSiteLeadsCount(null));
+  }, []);
 
   const [filters, setFilters] = useState({
     studentName: '', grade: '', subject: '', board: '', mode: '',
@@ -488,6 +495,8 @@ export default function ClassLeadsListPage() {
               <HeroStat label="New" value={loading ? '…' : pageStats.fresh} delay={260} />
               <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5 }} />
               <HeroStat label="Converted" value={loading ? '…' : pageStats.converted} delay={320} />
+              <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5 }} />
+              <HeroStat label="From Site" value={siteLeadsCount === null ? '…' : siteLeadsCount} delay={380} />
             </Box>
 
             <Tooltip title={user?.role === 'MANAGER' && !canCreateLeads ? 'No permission to create leads' : ''} arrow>
@@ -543,6 +552,8 @@ export default function ClassLeadsListPage() {
           <HeroStat label="Demo" value={loading ? '…' : pageStats.demo} delay={280} />
           <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.75 }} />
           <HeroStat label="Converted" value={loading ? '…' : pageStats.converted} delay={320} />
+          <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.75 }} />
+          <HeroStat label="Site" value={siteLeadsCount === null ? '…' : siteLeadsCount} delay={360} />
         </Box>
 
         {/* Orbs */}
