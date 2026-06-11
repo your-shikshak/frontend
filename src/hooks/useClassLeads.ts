@@ -23,6 +23,7 @@ export type LeadsFilters = {
   mode?: string;
   createdByName?: string;
   area?: string;
+  leadSource?: string;
 };
 
 const useClassLeads = (filters: LeadsFilters = {}) => {
@@ -50,6 +51,7 @@ const useClassLeads = (filters: LeadsFilters = {}) => {
         mode: filters.mode,
         createdByName: filters.createdByName,
         area: filters.area,
+        leadSource: filters.leadSource,
       });
       setLeads(res.data);
       setPagination(res.pagination);
@@ -59,11 +61,11 @@ const useClassLeads = (filters: LeadsFilters = {}) => {
       setLoading(false);
     }
   }, [
-    filters.page, 
-    filters.limit, 
-    filters.status, 
-    filters.search, 
-    filters.sortBy, 
+    filters.page,
+    filters.limit,
+    filters.status,
+    filters.search,
+    filters.sortBy,
     filters.sortOrder,
     filters.studentName,
     filters.grade,
@@ -71,7 +73,8 @@ const useClassLeads = (filters: LeadsFilters = {}) => {
     filters.board,
     filters.mode,
     filters.createdByName,
-    filters.area
+    filters.area,
+    filters.leadSource,
   ]);
 
   useEffect(() => {
