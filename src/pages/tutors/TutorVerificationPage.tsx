@@ -16,6 +16,7 @@ import {
   getPendingVerifications, updateVerificationStatus, getSubjects, getVerifiers,
   getCities,
   getAreas,
+  getTutors,
 } from '../../services/tutorService';
 import { useTheme } from '@mui/material/styles';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
@@ -65,6 +66,7 @@ export default function TutorVerificationPage() {
   const [verifiersList, setVerifiersList] = useState<{ _id: string; name: string }[]>([]);
   const [citiesList, setCitiesList] = useState<string[]>([]);
   const [areasList, setAreasList] = useState<string[]>([]);
+  const [kpis, setKpis] = useState({ total: 0, verified: 0, underReview: 0, rejected: 0 });
 
   const { options: subjectOptions } = useOptions('SUBJECT');
 
@@ -247,10 +249,28 @@ export default function TutorVerificationPage() {
       }
     };
 
+    const fetchKpis = async () => {
+      try {
+        const [total, verified, underReview, rejected] = await Promise.all([
+          getTutors({ page: 1, limit: 1 }),
+          getTutors({ page: 1, limit: 1, verificationStatus: 'VERIFIED' }),
+          getTutors({ page: 1, limit: 1, verificationStatus: 'UNDER_REVIEW' }),
+          getTutors({ page: 1, limit: 1, verificationStatus: 'REJECTED' }),
+        ]);
+        setKpis({
+          total: total.pagination.total,
+          verified: verified.pagination.total,
+          underReview: underReview.pagination.total,
+          rejected: rejected.pagination.total,
+        });
+      } catch { /* silently fail */ }
+    };
+
     fetchSubjects();
     fetchVerifiers();
     fetchCities();
     fetchAreas();
+    fetchKpis();
   }, []);
   const { tutors, loading: loadingTutors, error: tutorsError, pagination, refetch } = useTutors({
     page: page + 1,
@@ -392,6 +412,21 @@ export default function TutorVerificationPage() {
           </Typography>
         </Box>
 
+        {/* KPI Cards */}
+        <Box sx={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
+          {[
+            { label: 'Total Tutors', value: kpis.total, color: '#CE93D8', bg: 'rgba(255,255,255,0.1)' },
+            { label: 'Verified', value: kpis.verified, color: '#A5D6A7', bg: 'rgba(165,214,167,0.15)' },
+            { label: 'Under Review', value: kpis.underReview, color: '#FFF59D', bg: 'rgba(255,245,157,0.15)' },
+            { label: 'Pending / Rejected', value: pending.length + kpis.rejected, color: '#EF9A9A', bg: 'rgba(239,154,154,0.15)' },
+          ].map((kpi) => (
+            <Box key={kpi.label} sx={{ px: 2, py: 1.5, borderRadius: 2, bgcolor: kpi.bg, border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)' }}>
+              <Typography variant="h5" fontWeight={800} sx={{ color: kpi.color, lineHeight: 1 }}>{kpi.value}</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600, mt: 0.5, display: 'block' }}>{kpi.label}</Typography>
+            </Box>
+          ))}
+        </Box>
+
         <Box sx={{ position: 'relative', zIndex: 1 }}>
           <Tabs
             value={tab}
@@ -481,6 +516,7 @@ export default function TutorVerificationPage() {
           <Table size="small" sx={{ minWidth: 1100 }}>
             <TableHead>
               <TableRow sx={{ bgcolor: 'grey.100', '& .MuiTableCell-root': { color: 'text.primary', fontWeight: 700, borderBottom: '2px solid', borderColor: 'divider' } }}>
+                <TableCell sx={{ fontWeight: 700, width: 48 }}>#</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>
                   <TableSortLabel
                     active={sort.sortBy === 'teacherId'}
@@ -549,6 +585,7 @@ export default function TutorVerificationPage() {
               </TableRow>
               {/* Filter Row */}
               <TableRow sx={{ bgcolor: 'background.paper' }}>
+                <TableCell />
                 <TableCell>
                   <TextField
                     size="small"
@@ -726,14 +763,17 @@ export default function TutorVerificationPage() {
               {tab === 0 && (
                 <>
                   {loading ? (
-                    <TableRow><TableCell colSpan={13} align="center"><LoadingSpinner /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={14} align="center"><LoadingSpinner /></TableCell></TableRow>
                   ) : error ? (
-                    <TableRow><TableCell colSpan={13} align="center"><ErrorAlert error={error} /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={14} align="center"><ErrorAlert error={error} /></TableCell></TableRow>
                   ) : pending.length === 0 ? (
-                    <TableRow><TableCell colSpan={13} align="center" sx={{ py: 8 }}><Typography color="text.secondary">No pending verifications</Typography></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={14} align="center" sx={{ py: 8 }}><Typography color="text.secondary">No pending verifications</Typography></TableCell></TableRow>
                   ) : (
-                    pending.map((t) => (
+                    pending.map((t, idx) => (
                       <TableRow key={t.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>{idx + 1}</Typography>
+                        </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{t.teacherId || '-'}</Typography>
                         </TableCell>
@@ -806,11 +846,14 @@ export default function TutorVerificationPage() {
               {tab === 1 && (
                 <>
                   {loadingTutors ? (
-                    <TableRow><TableCell colSpan={13} align="center"><LoadingSpinner /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={14} align="center"><LoadingSpinner /></TableCell></TableRow>
                   ) : (
                     <>
-                      {tutors.map((t) => (
+                      {tutors.map((t, idx) => (
                         <TableRow key={t.id} hover>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>{page * rowsPerPage + idx + 1}</Typography>
+                          </TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{t.teacherId || '-'}</Typography>
                           </TableCell>
