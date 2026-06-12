@@ -567,34 +567,33 @@ export default function ClassLeadsListPage() {
           </Tooltip>
         </Box>
 
-        {/* KPI strip — full width, scrollable */}
+        {/* KPI grid — 2 columns */}
         <Box
           sx={{
-            display: 'flex',
-            overflowX: 'auto',
-            gap: 0,
-            bgcolor: 'rgba(0,0,0,0.2)',
+            display: 'grid',
+            gridTemplateRows: 'repeat(2, auto)',
+            gridAutoFlow: 'column',
+            gridAutoColumns: '1fr',
+            gap: '1px',
+            bgcolor: 'rgba(255,255,255,0.12)',
             borderRadius: '12px',
-            px: 1,
-            py: { xs: 0.5, sm: 0.75 },
             border: '1px solid rgba(255,255,255,0.12)',
+            overflow: 'hidden',
             mt: 2.5,
             position: 'relative',
             zIndex: 1,
-            scrollbarWidth: 'none',
-            '&::-webkit-scrollbar': { display: 'none' },
           }}
         >
           {([
             { key: null,              label: 'Total',        value: kpiStats.total,         status: undefined,          leadSource: undefined },
+            { key: 'SITE',            label: 'From Site',    value: kpiStats.site,           status: undefined,          leadSource: 'SITE' },
             { key: 'NEW',             label: 'New',          value: kpiStats.fresh,          status: 'NEW',              leadSource: undefined },
             { key: 'ANNOUNCED',       label: 'Announced',    value: kpiStats.announced,      status: 'ANNOUNCED',        leadSource: undefined },
             { key: 'DEMO_SCHEDULED',  label: 'Demo Sched',   value: kpiStats.demoScheduled,  status: 'DEMO_SCHEDULED',   leadSource: undefined },
             { key: 'DEMO_COMPLETED',  label: 'Demo Done',    value: kpiStats.demoCompleted,  status: 'DEMO_COMPLETED',   leadSource: undefined },
             { key: 'CONVERTED',       label: 'Converted',    value: kpiStats.converted,      status: 'CONVERTED',        leadSource: undefined },
-            { key: 'SITE',            label: 'From Site',    value: kpiStats.site,           status: undefined,          leadSource: 'SITE' },
-          ] as const).map((stat, i, arr) => (
-            <Box key={stat.label} display="flex" alignItems="stretch" sx={{ flexShrink: 0 }}>
+          ] as const).map((stat, i) => (
+            <Box key={stat.label} sx={{ bgcolor: 'rgba(0,0,0,0.18)' }}>
               <HeroStat
                 label={stat.label}
                 value={stat.value === null ? '…' : stat.value}
@@ -607,9 +606,6 @@ export default function ClassLeadsListPage() {
                 }}
                 onClear={stat.key !== null ? (e) => { e.stopPropagation(); setKpiFilter(null); setPage(1); } : undefined}
               />
-              {i < arr.length - 1 && (
-                <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.15)', my: 0.5, flexShrink: 0 }} />
-              )}
             </Box>
           ))}
         </Box>

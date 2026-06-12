@@ -26,7 +26,7 @@ import { USER_ROLES } from '../../constants';
 
 // ── Avatar palette ────────────────────────────────────────────────────────────
 const AVATAR_PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#2E7D32'];
-const getAvatarColor = (name: string) => AVATAR_PALETTE[(name?.charCodeAt(0) ?? 0) % AVATAR_PALETTE.length];
+const getAvatarColor = (name: string) => AVATAR_PALETTE[(name?.charCodeAt(0) || 65) % AVATAR_PALETTE.length];
 const getInitials = (name: string) =>
   (name || '?').trim().split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
