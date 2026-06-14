@@ -20,7 +20,7 @@ import MUIProfileCard from '../../components/tutors/MUIProfileCard';
 import { getFinalClasses } from '../../services/finalClassService';
 import { getPayments } from '../../services/paymentService';
 import { getAttendances } from '../../services/attendanceService';
-import { getMyProfile, updateTutorProfile, getTutorById, getTutorStats } from '../../services/tutorService';
+import { getMyProfile, updateTutorProfile, getTutorById, getTutorStats, updateTutorSettings } from '../../services/tutorService';
 import type { ITutor, IFinalClass, IAttendance, IPayment } from '../../types';
 import { useOptions } from '@/hooks/useOptions';
 import { CurriculumTreeSelector } from '../../components/tutors/CurriculumTreeSelector';
@@ -75,6 +75,15 @@ const TutorProfilePage: React.FC = () => {
   const [preferredAreas, setPreferredAreas] = useState<string[]>([]);
   const [experienceInput, setExperienceInput] = useState('');
   const [availableAreas, setAvailableAreas] = useState<string[]>([]);
+  const [daysAvailable, setDaysAvailable] = useState<string[]>([]);
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+
+  const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const ALL_TIME_SLOTS = [
+    '6:00 AM - 8:00 AM', '8:00 AM - 10:00 AM', '10:00 AM - 12:00 PM',
+    '12:00 PM - 2:00 PM', '2:00 PM - 4:00 PM', '4:00 PM - 6:00 PM',
+    '6:00 PM - 8:00 PM', '8:00 PM - 10:00 PM',
+  ];
 
   const formatSubjectLabel = (subject: any) => {
     if (!subject) return '-';
@@ -135,6 +144,9 @@ const TutorProfilePage: React.FC = () => {
         if (tutor?.subjects) {
           setSelectedSubjects(tutor.subjects);
         }
+        const avail = (tutor as any)?.settings?.availabilityPreferences;
+        if (avail?.daysAvailable) setDaysAvailable(avail.daysAvailable);
+        if (avail?.timeSlots) setTimeSlots(avail.timeSlots);
 
         // Fetch detailed data for Admin view
         if (id && tutor && tutor.user) {
@@ -202,13 +214,20 @@ const TutorProfilePage: React.FC = () => {
 
     try {
       setSaving(true);
-      await updateTutorProfile(tutorProfile.id, {
-        subjects,
-        qualifications,
-        preferredLocations,
-        experience,
-        extracurricularActivities,
-      } as any);
+      await Promise.all([
+        updateTutorProfile(tutorProfile.id, {
+          subjects,
+          qualifications,
+          preferredLocations,
+          experience,
+          extracurricularActivities,
+        } as any),
+        (daysAvailable.length > 0 || timeSlots.length > 0)
+          ? updateTutorSettings(tutorProfile.id, {
+              availabilityPreferences: { daysAvailable, timeSlots },
+            })
+          : Promise.resolve(),
+      ]);
 
       // Refresh local copy so future opens reflect latest data
       const resp = await getMyProfile();
@@ -1269,6 +1288,51 @@ const TutorProfilePage: React.FC = () => {
               />
             )}
           />
+          {/* Availability */}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: 'text.primary' }}>
+              Available Days
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {ALL_DAYS.map((day) => (
+                <Chip
+                  key={day}
+                  label={day.slice(0, 3)}
+                  size="small"
+                  onClick={() => setDaysAvailable((prev) => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day])}
+                  sx={{
+                    fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
+                    bgcolor: daysAvailable.includes(day) ? 'primary.main' : 'grey.100',
+                    color: daysAvailable.includes(day) ? '#fff' : 'text.secondary',
+                    border: 'none',
+                    '&:hover': { opacity: 0.85 },
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: 'text.primary' }}>
+              Preferred Time Slots
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {ALL_TIME_SLOTS.map((slot) => (
+                <Chip
+                  key={slot}
+                  label={slot}
+                  size="small"
+                  onClick={() => setTimeSlots((prev) => prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot])}
+                  sx={{
+                    fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer',
+                    bgcolor: timeSlots.includes(slot) ? 'primary.main' : 'grey.100',
+                    color: timeSlots.includes(slot) ? '#fff' : 'text.secondary',
+                    border: 'none',
+                    '&:hover': { opacity: 0.85 },
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button

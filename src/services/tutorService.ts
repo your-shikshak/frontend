@@ -86,6 +86,14 @@ export const deleteTutorProfile = async (tutorId: string): Promise<ApiResponse<n
   return data as ApiResponse<null>;
 };
 
+export const updateTutorSettings = async (
+  tutorId: string,
+  settings: { availabilityPreferences?: { daysAvailable?: string[]; timeSlots?: string[] } }
+): Promise<ApiResponse<ITutor>> => {
+  const { data } = await api.patch(`${API_ENDPOINTS.TUTORS}/${tutorId}/settings`, settings);
+  return data as ApiResponse<ITutor>;
+};
+
 export const uploadDocument = async (
   tutorId: string,
   documentType: string,
