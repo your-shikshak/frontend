@@ -35,7 +35,9 @@ import {
     CheckCircle as CheckCircleIcon,
     School as SchoolIcon,
     Work as WorkIcon,
-    Lock as LockIcon
+    Lock as LockIcon,
+    OpenInNew as OpenInNewIcon,
+    BrokenImage as BrokenImageIcon,
 } from '@mui/icons-material';
 import { ITutor } from '../../types';
 import tutorService from '../../services/tutorService';
@@ -46,6 +48,37 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import DocumentViewerModal from '../../components/common/DocumentViewerModal';
 import RejectionDialog from '../../components/tutors/RejectionDialog';
 import { Eye } from 'lucide-react';
+
+const PaymentScreenshot: React.FC<{ url: string; borderColor?: string }> = ({ url, borderColor = 'divider' }) => {
+    const [imgError, setImgError] = useState(false);
+    return (
+        <Box sx={{ width: '100%', borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor, bgcolor: '#fff' }}>
+            {!imgError ? (
+                <img
+                    src={url}
+                    alt="Payment Proof"
+                    style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }}
+                    onError={() => setImgError(true)}
+                />
+            ) : (
+                <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+                    <BrokenImageIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                        Image could not load inline. Open it directly:
+                    </Typography>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        endIcon={<OpenInNewIcon />}
+                        onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                    >
+                        Open Screenshot
+                    </Button>
+                </Box>
+            )}
+        </Box>
+    );
+};
 
 const getDocumentComponent = (url: string) => {
     const cleanUrl = url.toLowerCase().split('?')[0];
@@ -329,9 +362,9 @@ const TutorVerificationDetailsPage: React.FC = () => {
                                     <Typography variant="body2" sx={{ p: 1, color: 'text.secondary' }}>No documents uploaded</Typography>
                                 )}
                                 <Chip
-                                    label={`Payment · ${paymentStatusLabel}`}
+                                    label={`Payment · ${feeStatus === 'PENDING' && paymentProofUrl ? 'SCREENSHOT UPLOADED' : paymentStatusLabel}`}
                                     onClick={() => setSelectedDocIndex(paymentTabIndex)}
-                                    color={isPaymentTab ? 'primary' : 'default'}
+                                    color={isPaymentTab ? 'primary' : feeStatus === 'PAID' ? 'success' : feeStatus === 'PENDING' && paymentProofUrl ? 'warning' : 'default'}
                                     variant={isPaymentTab ? 'filled' : 'outlined'}
                                     icon={feeStatus === 'PAID' ? <CheckCircleIcon /> : undefined}
                                     clickable
@@ -358,7 +391,7 @@ const TutorVerificationDetailsPage: React.FC = () => {
                                         </Box>
 
                                         {/* State 1: Not chosen */}
-                                        {!feeStatus && (
+                                        {(!feeStatus || (feeStatus === 'PENDING' && !paymentProofUrl)) && (
                                             <Alert severity="info" sx={{ borderRadius: 2 }}>
                                                 <Typography variant="subtitle2" fontWeight={700} gutterBottom>
                                                     Payment method not selected
@@ -385,7 +418,28 @@ const TutorVerificationDetailsPage: React.FC = () => {
                                             </Alert>
                                         )}
 
-                                        {/* State 3: Paid */}
+                                        {/* State 3: Screenshot uploaded, awaiting admin verification */}
+                                        {feeStatus === 'PENDING' && paymentProofUrl && (
+                                            <>
+                                                <Alert severity="warning" sx={{ borderRadius: 2, mb: 2 }}>
+                                                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                                                        Payment screenshot uploaded — awaiting verification
+                                                    </Typography>
+                                                    <Typography variant="body2">
+                                                        The tutor has uploaded a payment screenshot. Please review it below
+                                                        and verify or reject the tutor accordingly.
+                                                    </Typography>
+                                                </Alert>
+                                                {paymentDate && (
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                                        Uploaded on: <strong>{paymentDate}</strong>
+                                                    </Typography>
+                                                )}
+                                                <PaymentScreenshot url={paymentProofUrl} borderColor="warning.main" />
+                                            </>
+                                        )}
+
+                                        {/* State 4: Paid and confirmed */}
                                         {feeStatus === 'PAID' && (
                                             <>
                                                 {paymentDate && (
@@ -394,34 +448,11 @@ const TutorVerificationDetailsPage: React.FC = () => {
                                                     </Typography>
                                                 )}
                                                 {!paymentProofUrl ? (
-                                                    <Alert severity="info" sx={{ borderRadius: 2 }}>
-                                                        Marked as paid, but no payment screenshot was uploaded.
+                                                    <Alert severity="success" sx={{ borderRadius: 2 }}>
+                                                        Payment confirmed. No screenshot on record.
                                                     </Alert>
                                                 ) : (
-                                                    <Box
-                                                        sx={{
-                                                            width: '100%',
-                                                            borderRadius: 2,
-                                                            overflow: 'hidden',
-                                                            border: '1px solid',
-                                                            borderColor: 'divider',
-                                                            bgcolor: '#fff',
-                                                        }}
-                                                    >
-                                                        <img
-                                                            src={paymentProofUrl}
-                                                            alt="Payment Proof"
-                                                            style={{
-                                                                width: '100%',
-                                                                height: 'auto',
-                                                                display: 'block',
-                                                                objectFit: 'contain',
-                                                            }}
-                                                            onError={(e) => {
-                                                                (e.target as HTMLImageElement).style.display = 'none';
-                                                            }}
-                                                        />
-                                                    </Box>
+                                                    <PaymentScreenshot url={paymentProofUrl} borderColor="success.main" />
                                                 )}
                                             </>
                                         )}
