@@ -29,7 +29,14 @@ import { registrationOtpAPI } from '@/api/client';
 import { toast } from 'sonner';
 
 // ── Step definitions ──────────────────────────────────────────────────────────
-const STEPS = ['Personal', 'Professional', 'Location', 'Security'];
+const STEPS = ['Personal', 'Professional', 'Location', 'Availability', 'Security'];
+
+const DAY_OPTS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const TIME_SLOT_OPTS = [
+  '6:00 AM - 8:00 AM', '8:00 AM - 10:00 AM', '10:00 AM - 12:00 PM',
+  '12:00 PM - 2:00 PM', '2:00 PM - 4:00 PM', '4:00 PM - 6:00 PM',
+  '6:00 PM - 8:00 PM', '8:00 PM - 10:00 PM',
+];
 
 // ── Field group helpers ───────────────────────────────────────────────────────
 const FieldLabel = ({ children }: { children: React.ReactNode }) => (
@@ -65,6 +72,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
     password: '', confirmPassword: '', city: '', preferredAreas: [],
     preferredMode: TeachingMode.OFFLINE, permanentAddress: '', residentialAddress: '',
     alternatePhone: '', bio: '', languagesKnown: [], skills: [],
+    daysAvailable: [], timeSlots: [],
   });
 
   useEffect(() => {
@@ -75,7 +83,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
   const [errors, setErrors]     = useState<Record<string, string>>({});
   const [currentStep, setCurrentStep] = useState(0);
 
-  // steps: for edit mode without password step
+  // steps: for edit mode without password/availability steps
   const steps = mode === 'create' ? STEPS : STEPS.slice(0, 3);
 
   // ── Email OTP ──────────────────────────────────────────────────────────────
@@ -145,7 +153,9 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
       }
     }
 
-    if (step === 3 && mode === 'create') {
+    // step 3 = Availability (no hard validation — optional fields)
+
+    if (step === 4 && mode === 'create') {
       if (!formData.password)                        e.password        = 'Password is required';
       else if (formData.password.length < 6)         e.password        = 'Password must be 6+ characters';
       if (!formData.confirmPassword)                 e.confirmPassword = 'Confirm your password';
@@ -486,7 +496,68 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
     </Grid>
   );
 
+  const toggleChip = (key: 'daysAvailable' | 'timeSlots', value: string) => {
+    setFormData(p => {
+      const arr = (p[key] || []) as string[];
+      return { ...p, [key]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
+    });
+  };
+
   const renderStep3 = () => (
+    <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+      <Grid item xs={12}>
+        <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#001F54', 0.04), border: `1px solid ${alpha('#001F54', 0.1)}`, mb: 1 }}>
+          <Typography sx={{ fontSize: 13, color: '#475569' }}>
+            Let students know when you're available. This improves your match score.
+          </Typography>
+        </Box>
+      </Grid>
+      <Grid item xs={12}>
+        <Typography sx={{ fontSize: 11, fontWeight: 600, color: '#64748B', mb: 1, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          Available Days
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {DAY_OPTS.map(day => {
+            const selected = (formData.daysAvailable || []).includes(day);
+            return (
+              <Chip key={day} label={day} onClick={() => toggleChip('daysAvailable', day)}
+                sx={{
+                  cursor: 'pointer', borderRadius: 1.5, fontWeight: 600, fontSize: 13,
+                  bgcolor: selected ? '#001F54' : '#F1F5F9',
+                  color: selected ? 'white' : '#475569',
+                  border: selected ? '1.5px solid #001F54' : '1.5px solid #E2E8F0',
+                  '&:hover': { bgcolor: selected ? '#002a7a' : '#E2E8F0' },
+                }}
+              />
+            );
+          })}
+        </Box>
+      </Grid>
+      <Grid item xs={12}>
+        <Typography sx={{ fontSize: 11, fontWeight: 600, color: '#64748B', mb: 1, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          Available Time Slots
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {TIME_SLOT_OPTS.map(slot => {
+            const selected = (formData.timeSlots || []).includes(slot);
+            return (
+              <Chip key={slot} label={slot} onClick={() => toggleChip('timeSlots', slot)}
+                sx={{
+                  cursor: 'pointer', borderRadius: 1.5, fontWeight: 600, fontSize: 12,
+                  bgcolor: selected ? '#001F54' : '#F1F5F9',
+                  color: selected ? 'white' : '#475569',
+                  border: selected ? '1.5px solid #001F54' : '1.5px solid #E2E8F0',
+                  '&:hover': { bgcolor: selected ? '#002a7a' : '#E2E8F0' },
+                }}
+              />
+            );
+          })}
+        </Box>
+      </Grid>
+    </Grid>
+  );
+
+  const renderStep4 = () => (
     <Grid container spacing={{ xs: 1.5, sm: 2 }}>
       <Grid item xs={12}>
         <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#001F54', 0.04), border: `1px solid ${alpha('#001F54', 0.1)}`, mb: 1 }}>
@@ -516,7 +587,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
     </Grid>
   );
 
-  const stepContent = [renderStep0, renderStep1, renderStep2, ...(mode === 'create' ? [renderStep3] : [])];
+  const stepContent = [renderStep0, renderStep1, renderStep2, ...(mode === 'create' ? [renderStep3, renderStep4] : [])];
 
   // ── Stepper ────────────────────────────────────────────────────────────────
   const StepIndicator = () => (
@@ -594,13 +665,14 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
         <Box sx={{ px: { xs: 2, sm: 3.5 }, pt: { xs: 2, sm: 3 }, pb: 0 }}>
           <StepIndicator />
           <Typography sx={{ fontSize: { xs: 15, sm: 17 }, fontWeight: 800, color: '#0F172A', mb: 0.25 }}>
-            {['Personal Information', 'Professional Background', 'Location & Availability', 'Account Security'][currentStep]}
+            {['Personal Information', 'Professional Background', 'Location & Preferences', 'Availability', 'Account Security'][currentStep]}
           </Typography>
           <Typography sx={{ fontSize: 12, color: '#94A3B8', mb: 2 }}>
             {[
               'Basic details about you',
               'Your qualifications and what you teach',
               'Where and how you want to teach',
+              'Choose your available days and time slots',
               'Set a secure password for your account',
             ][currentStep]}
           </Typography>
