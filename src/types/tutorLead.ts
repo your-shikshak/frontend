@@ -31,6 +31,8 @@ export interface TutorLeadFormData {
   languagesKnown?: string[];
   skills?: string[];
   verificationStatus?: string;
+  daysAvailable?: string[];
+  timeSlots?: string[];
 }
 
 // City-Area mapping type

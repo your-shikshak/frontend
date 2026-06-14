@@ -24,6 +24,8 @@ export const tutorLeadRegistrationSchema = z.object({
   bio: z.string().optional(),
   languagesKnown: z.array(z.string()).optional(),
   skills: z.array(z.string()).optional(),
+  daysAvailable: z.array(z.string()).optional().default([]),
+  timeSlots: z.array(z.string()).optional().default([]),
 }).superRefine((data, ctx) => {
   if (data.password !== data.confirmPassword) {
     ctx.addIssue({
