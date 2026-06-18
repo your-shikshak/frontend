@@ -186,6 +186,8 @@ export const NAVIGATION_ITEMS = [
   { label: 'Tutor Performance', path: '/tutor-performance', allowedRoles: [USER_ROLES.COORDINATOR], description: 'Analyze tutor metrics and feedback' },
   { label: 'Payment Tracking', path: '/payment-tracking', allowedRoles: [USER_ROLES.COORDINATOR], description: 'Monitor payment statuses' },
   { label: 'Attendance Sheet', path: '/coordinator-attendance-sheet', allowedRoles: [USER_ROLES.COORDINATOR, USER_ROLES.ADMIN], description: 'Detailed attendance records and sheet management' },
+  { label: 'Banner Notifications', path: '/banner-notifications', allowedRoles: [USER_ROLES.COORDINATOR], description: 'Upload and manage banner images shown to teachers' },
+  { label: 'Banner Notifications', path: '/admin/banner-notifications', allowedRoles: [USER_ROLES.ADMIN], description: 'Upload and manage banner images shown to teachers' },
   { label: 'Settings', path: '/coordinator-settings', allowedRoles: [USER_ROLES.COORDINATOR], description: 'Manage your account settings' },
   { label: 'Payments', path: '/payments', allowedRoles: [USER_ROLES.ADMIN], description: 'Oversee all system payments' },
   { label: 'Profile', path: '/profile', allowedRoles: [USER_ROLES.MANAGER, USER_ROLES.TUTOR, USER_ROLES.PARENT, USER_ROLES.ADMIN], description: 'View and edit your personal profile' },
