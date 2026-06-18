@@ -41,6 +41,9 @@ import { getClassLeads, deleteClassLead } from '../../services/leadService';
 import { getPayments, deletePayment } from '../../services/paymentService';
 import { getAttendances, deleteAttendance } from '../../services/attendanceService';
 import { getTutors, deleteTutorProfile } from '../../services/tutorService';
+import { getOptions, createOrUpdateOption, OptionItem } from '../../services/optionsService';
+import OndemandVideoIcon from '@mui/icons-material/OndemandVideo';
+import SaveIcon from '@mui/icons-material/Save';
 
 import {
   CLASS_LEAD_STATUS,
@@ -107,6 +110,39 @@ const DataManagementPage: React.FC = () => {
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [selectedLeadStudents, setSelectedLeadStudents] = useState<any[]>([]);
   const [selectedLeadName, setSelectedLeadName] = useState('');
+
+  // Teacher Tutorial Video
+  const [tutorialRecord, setTutorialRecord] = useState<OptionItem | null>(null);
+  const [tutorialVideoUrl, setTutorialVideoUrl] = useState('');
+  const [tutorialDescription, setTutorialDescription] = useState('');
+  const [tutorialSaving, setTutorialSaving] = useState(false);
+
+  useEffect(() => {
+    getOptions('TEACHER_TUTORIAL').then((opts) => {
+      const rec = opts[0] ?? null;
+      setTutorialRecord(rec);
+      setTutorialVideoUrl(rec?.metadata?.videoUrl ?? '');
+      setTutorialDescription(rec?.metadata?.description ?? '');
+    }).catch(() => {});
+  }, []);
+
+  const saveTutorial = async () => {
+    setTutorialSaving(true);
+    try {
+      const saved = await createOrUpdateOption(tutorialRecord?._id, {
+        type: 'TEACHER_TUTORIAL',
+        label: 'Teacher Tutorial Video',
+        value: 'tutorial',
+        metadata: { videoUrl: tutorialVideoUrl.trim(), description: tutorialDescription.trim() },
+      });
+      setTutorialRecord(saved);
+      setSnackbar({ open: true, message: 'Tutorial video saved successfully', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to save tutorial video', severity: 'error' });
+    } finally {
+      setTutorialSaving(false);
+    }
+  };
 
   const navigate = useNavigate();
 
@@ -682,6 +718,51 @@ const DataManagementPage: React.FC = () => {
           <Typography variant="body2" color="text.secondary">{new Date().toLocaleTimeString()}</Typography>
         </Stack>
       </Box>
+
+      {/* ── Teacher Tutorial Video ── */}
+      <Card sx={{ mb: 3, border: '1px solid', borderColor: 'divider' }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={1} mb={2}>
+            <OndemandVideoIcon color="primary" />
+            <Typography variant="h6" fontWeight={700}>Teacher Tutorial Video</Typography>
+          </Box>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="YouTube Video URL"
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={tutorialVideoUrl}
+                onChange={(e) => setTutorialVideoUrl(e.target.value)}
+                helperText="Paste a YouTube link. Tutors will see this in the Get Started screen."
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Description"
+                placeholder="Brief description shown below the video…"
+                value={tutorialDescription}
+                onChange={(e) => setTutorialDescription(e.target.value)}
+                multiline
+                rows={2}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={saveTutorial}
+                disabled={tutorialSaving}
+              >
+                {tutorialSaving ? 'Saving…' : 'Save Tutorial'}
+              </Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
       <Tabs value={entityType} onChange={handleEntityTypeChange} sx={{ mb: 1 }}>
         <Tab label={ENTITY_CONFIG.ClassLead.label} value="ClassLead" />
