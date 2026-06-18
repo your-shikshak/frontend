@@ -22,10 +22,13 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
-import { OptionItem, getOptionTypes } from '@/services/optionsService';
+import { OptionItem, getOptionTypes, getOptions, createOrUpdateOption } from '@/services/optionsService';
 import { useOptions } from '@/hooks/useOptions';
 import SnackbarNotification from '@/components/common/SnackbarNotification';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import OndemandVideoIcon from '@mui/icons-material/OndemandVideo';
+import SaveIcon from '@mui/icons-material/Save';
+import { Grid, TextField as MuiTextField, Card, CardContent, CircularProgress as MuiCircularProgress } from '@mui/material';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
@@ -485,6 +488,39 @@ const OptionsManagementPage: React.FC = () => {
 
   const isMiller = currentType === 'CURRICULUM' || currentType === 'CITY';
 
+  // Teacher Tutorial Video
+  const [tutorialRecord, setTutorialRecord] = useState<OptionItem | null>(null);
+  const [tutorialVideoUrl, setTutorialVideoUrl] = useState('');
+  const [tutorialDescription, setTutorialDescription] = useState('');
+  const [tutorialSaving, setTutorialSaving] = useState(false);
+
+  useEffect(() => {
+    getOptions('TEACHER_TUTORIAL').then((opts) => {
+      const rec = opts[0] ?? null;
+      setTutorialRecord(rec);
+      setTutorialVideoUrl(rec?.metadata?.videoUrl ?? '');
+      setTutorialDescription(rec?.metadata?.description ?? '');
+    }).catch(() => {});
+  }, []);
+
+  const saveTutorial = async () => {
+    setTutorialSaving(true);
+    try {
+      const saved = await createOrUpdateOption(tutorialRecord?._id, {
+        type: 'TEACHER_TUTORIAL',
+        label: 'Teacher Tutorial Video',
+        value: 'tutorial',
+        metadata: { videoUrl: tutorialVideoUrl.trim(), description: tutorialDescription.trim() },
+      });
+      setTutorialRecord(saved);
+      showSnackbar('Tutorial video saved successfully');
+    } catch {
+      showSnackbar('Failed to save tutorial video', 'error');
+    } finally {
+      setTutorialSaving(false);
+    }
+  };
+
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
 
@@ -531,6 +567,49 @@ const OptionsManagementPage: React.FC = () => {
 
       {/* ── Content area ────────────────────────────────────────────────────── */}
       <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 2.5 } }}>
+
+        {/* ── Teacher Tutorial Video ──────────────────────────────────────────── */}
+        <Card elevation={0} sx={{ mb: 3, border: '1px solid #E2E8F0', borderRadius: '12px' }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <OndemandVideoIcon sx={{ color: '#1C3556' }} />
+              <Typography sx={{ fontSize: 15, fontWeight: 800, color: '#1C3556', letterSpacing: -0.3 }}>
+                Teacher Tutorial Video
+              </Typography>
+            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <MuiTextField
+                  fullWidth size="small" label="YouTube Video URL"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={tutorialVideoUrl}
+                  onChange={(e) => setTutorialVideoUrl(e.target.value)}
+                  helperText="Paste a YouTube link. Tutors see this in the Get Started screen."
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <MuiTextField
+                  fullWidth size="small" label="Description"
+                  placeholder="Brief description shown below the video…"
+                  value={tutorialDescription}
+                  onChange={(e) => setTutorialDescription(e.target.value)}
+                  multiline rows={2}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  variant="contained" startIcon={tutorialSaving ? <MuiCircularProgress size={14} color="inherit" /> : <SaveIcon />}
+                  onClick={saveTutorial} disabled={tutorialSaving}
+                  sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', boxShadow: 'none', bgcolor: '#1C3556', '&:hover': { bgcolor: '#152943' }, transition: T, '&:active': { transform: 'scale(0.97)' } }}
+                >
+                  {tutorialSaving ? 'Saving…' : 'Save Tutorial'}
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
 
         {/* ── Type pill switcher ────────────────────────────────────────────── */}
         <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 2.5, alignItems: 'center' }}>
