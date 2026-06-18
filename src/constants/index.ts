@@ -157,6 +157,7 @@ export const NAVIGATION_ITEMS = [
   { label: 'My Activity', path: '/tutor-leads', allowedRoles: [USER_ROLES.TUTOR], description: 'Track your demo sessions and class interests' },
   { label: 'Notes', path: '/tutor-notes', allowedRoles: [USER_ROLES.TUTOR], description: 'Personal notes and scratchpad' },
 
+  { label: 'Class Requests', path: '/class-requests', allowedRoles: [USER_ROLES.MANAGER, USER_ROLES.ADMIN], description: 'Review tutor requests submitted by parents via the app' },
   { label: 'Class Leads', path: '/class-leads', allowedRoles: [USER_ROLES.MANAGER, USER_ROLES.ADMIN], description: 'Manage prospective student leads and inquiries' },
   { label: 'Lead CRM', path: '/manager/leads-crm', allowedRoles: [USER_ROLES.MANAGER, USER_ROLES.ADMIN], description: 'Advanced pipeline for lead management' },
 

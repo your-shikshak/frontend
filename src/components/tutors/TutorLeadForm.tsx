@@ -24,7 +24,6 @@ import type { TutorLeadFormData, TutorLeadFormProps } from '@/types/tutorLead';
 import { Gender, TeachingMode } from '../../types/enums';
 import { validateEmail, validatePhone } from '@/utils/leadValidation';
 import { useOptions } from '@/hooks/useOptions';
-import { CurriculumTreeSelector } from './CurriculumTreeSelector';
 import { registrationOtpAPI } from '@/api/client';
 import { toast } from 'sonner';
 
@@ -121,6 +120,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
   };
 
   // ── Options ────────────────────────────────────────────────────────────────
+  const { options: subjectOptions } = useOptions('SUBJECT');
   const { options: extracurricularOptions } = useOptions('EXTRACURRICULAR_ACTIVITY');
   const extracurricularLabels = useMemo(() => extracurricularOptions.map((o) => o.label), [extracurricularOptions]);
   const { options: cityOptions } = useOptions('CITY');
@@ -311,14 +311,37 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
             <LibraryBooksIcon sx={{ fontSize: 16, color: '#001F54' }} />
             <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#001F54' }}>Select Your Subjects *</Typography>
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-            Browse the curriculum hierarchy and select subjects you teach.
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            Select all subjects you can teach.
           </Typography>
-          <CurriculumTreeSelector
-            selectedSubjectIds={formData.subjects.map((s: any) => (typeof s === 'string' ? s : s?._id)).filter(Boolean)}
-            onChange={(ids) => setFormData(p => ({ ...p, subjects: ids }))}
-            error={errors.subjects} disabled={isFieldReadOnly('subjects')}
-          />
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {subjectOptions.map((opt) => {
+              const selectedIds: string[] = formData.subjects.map((s: any) => typeof s === 'string' ? s : String(s?._id)).filter(Boolean);
+              const isSelected = selectedIds.includes(opt._id);
+              return (
+                <Chip
+                  key={opt._id}
+                  label={opt.label}
+                  clickable
+                  disabled={isFieldReadOnly('subjects')}
+                  onClick={() => {
+                    const next = isSelected
+                      ? selectedIds.filter((id) => id !== opt._id)
+                      : [...selectedIds, opt._id];
+                    setFormData(p => ({ ...p, subjects: next }));
+                  }}
+                  sx={{
+                    fontWeight: 600,
+                    bgcolor: isSelected ? '#001F54' : 'white',
+                    color: isSelected ? 'white' : '#374151',
+                    border: '1.5px solid',
+                    borderColor: isSelected ? '#001F54' : '#CBD5E1',
+                    '&:hover': { bgcolor: isSelected ? '#001F54' : '#F1F5F9' },
+                  }}
+                />
+              );
+            })}
+          </Box>
         </Box>
         {errors.subjects && <FormHelperText error sx={{ mt: 0.5 }}>{errors.subjects}</FormHelperText>}
       </Grid>

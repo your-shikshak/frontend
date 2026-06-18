@@ -1,14 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-  Container,
   Box,
   Typography,
-  Card,
-  CardContent,
   TextField,
   Button,
-  Grid,
   Table,
   TableHead,
   TableRow,
@@ -24,6 +20,9 @@ import {
   Checkbox,
   CircularProgress,
   Link,
+  InputAdornment,
+  MenuItem,
+  Avatar,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -32,19 +31,97 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import SnackbarNotification from '../../components/common/SnackbarNotification';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CreateManagerModal from '../../components/admin/CreateManagerModal';
 import EditManagerModal from '../../components/admin/EditManagerModal';
 import managerService from '../../services/managerService';
 import { IManager, IUser } from '../../types';
 
+// ─── Shared transition ────────────────────────────────────────────────────────
+const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+const TRANSITION = `all 150ms ${EASE}`;
+
+// ─── Avatar colour from name ──────────────────────────────────────────────────
+const AVATAR_COLORS = ['#2D68C4', '#0E7490', '#059669', '#D97706', '#9333EA', '#E11D48'];
+const avatarColor = (name = '') =>
+  AVATAR_COLORS[(name.charCodeAt(0) || 65) % AVATAR_COLORS.length];
+
+const initials = (name = '') =>
+  name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
+// ─── Status chip ──────────────────────────────────────────────────────────────
+const StatusChip: React.FC<{ active: boolean }> = ({ active }) => (
+  <Box
+    component="span"
+    sx={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '5px',
+      px: 1.25,
+      py: 0.4,
+      borderRadius: '6px',
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.3,
+      bgcolor: active ? '#DCFCE7' : '#F1F5F9',
+      color: active ? '#15803D' : '#64748B',
+    }}
+  >
+    <Box
+      component="span"
+      sx={{
+        width: 5,
+        height: 5,
+        borderRadius: '50%',
+        bgcolor: active ? '#16A34A' : '#94A3B8',
+      }}
+    />
+    {active ? 'Active' : 'Inactive'}
+  </Box>
+);
+
+// ─── Verification chip ────────────────────────────────────────────────────────
+const VerifChip: React.FC<{ status?: string }> = ({ status }) => {
+  const s = status || 'PENDING';
+  const map: Record<string, { bg: string; color: string }> = {
+    VERIFIED: { bg: '#DCFCE7', color: '#15803D' },
+    REJECTED: { bg: '#FEE2E2', color: '#DC2626' },
+    PENDING: { bg: '#FEF9C3', color: '#A16207' },
+  };
+  const style = map[s] || map.PENDING;
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        px: 1.25,
+        py: 0.4,
+        borderRadius: '6px',
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 0.3,
+        bgcolor: style.bg,
+        color: style.color,
+      }}
+    >
+      {s}
+    </Box>
+  );
+};
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 const ManagersManagementPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const isXs = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [managers, setManagers] = useState<IManager[]>([]);
   const [users, setUsers] = useState<IUser[]>([]);
@@ -55,13 +132,18 @@ const ManagersManagementPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [usersLoading, setUsersLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info';
+  }>({ open: false, message: '', severity: 'success' });
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  // managerToVerify and verificationModalOpen removed
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -74,27 +156,28 @@ const ManagersManagementPage: React.FC = () => {
     let timer: any;
     return (q: string) => {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        setSearchQuery(q);
-      }, 500);
+      timer = setTimeout(() => setSearchQuery(q), 500);
     };
   }, []);
 
-  const loadManagers = useCallback(async (p = page, l = rowsPerPage) => {
-    setLoading(true);
-    try {
-      const filters: any = {};
-      if (isActiveFilter !== 'all') filters.isActive = isActiveFilter === 'active';
-      if (searchQuery) filters.search = searchQuery;
-      const res = await managerService.getAllManagers(p + 1, l, filters.isActive);
-      setManagers(res.data as unknown as IManager[]);
-      setTotal(res.pagination.total);
-    } catch (e: any) {
-      setError(e?.response?.data?.error || e?.message || 'Failed to load managers');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, rowsPerPage, isActiveFilter, searchQuery]);
+  const loadManagers = useCallback(
+    async (p = page, l = rowsPerPage) => {
+      setLoading(true);
+      try {
+        const filters: any = {};
+        if (isActiveFilter !== 'all') filters.isActive = isActiveFilter === 'active';
+        if (searchQuery) filters.search = searchQuery;
+        const res = await managerService.getAllManagers(p + 1, l, filters.isActive);
+        setManagers(res.data as unknown as IManager[]);
+        setTotal(res.pagination.total);
+      } catch (e: any) {
+        setError(e?.response?.data?.error || e?.message || 'Failed to load managers');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, rowsPerPage, isActiveFilter, searchQuery],
+  );
 
   const loadEligibleUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -109,7 +192,7 @@ const ManagersManagementPage: React.FC = () => {
         updatedAt: new Date(),
       })) as IUser[];
       setUsers(mapped);
-    } catch (e: any) {
+    } catch {
       setError('Failed to load users');
     } finally {
       setUsersLoading(false);
@@ -125,85 +208,89 @@ const ManagersManagementPage: React.FC = () => {
   useEffect(() => {
     setPage(0);
     loadManagers(0, rowsPerPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActiveFilter, searchQuery, rowsPerPage]);
 
-  const handleCreateManager = useCallback(async (payload: {
-    userId: string;
-    permissions: {
-      canViewSiteLeads?: boolean;
-      canVerifyTutors?: boolean;
-      canCreateLeads?: boolean;
-    };
-  }) => {
-    try {
-      await managerService.createManagerProfile(payload);
-      setSnackbar({ open: true, message: 'Manager profile created successfully', severity: 'success' });
-      setCreateModalOpen(false);
-      loadManagers();
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Failed to create manager';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
-      throw e;
-    }
-  }, [loadManagers]);
-
-  const handleEditManager = useCallback(async (
-    managerId: string,
-    updateData: {
-      isActive?: boolean;
-      permissions?: {
+  const handleCreateManager = useCallback(
+    async (payload: {
+      userId: string;
+      permissions: {
         canViewSiteLeads?: boolean;
         canVerifyTutors?: boolean;
         canCreateLeads?: boolean;
       };
-    }
-  ) => {
-    try {
-      await managerService.updateManagerProfile(managerId, updateData);
-      setSnackbar({ open: true, message: 'Manager profile updated successfully', severity: 'success' });
-      setEditModalOpen(false);
-      setSelectedManager(null);
-      loadManagers();
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Failed to update manager';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
-      throw e;
-    }
-  }, [loadManagers]);
+    }) => {
+      try {
+        await managerService.createManagerProfile(payload);
+        setSnackbar({ open: true, message: 'Manager profile created', severity: 'success' });
+        setCreateModalOpen(false);
+        loadManagers();
+      } catch (e: any) {
+        const msg = e?.response?.data?.error || e?.message || 'Failed to create manager';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+        throw e;
+      }
+    },
+    [loadManagers],
+  );
 
-  const handleDeleteManager = useCallback(async (managerId: string) => {
-    try {
-      setConfirmLoading(true);
-      await managerService.deleteManagerProfile(managerId);
-      setSnackbar({ open: true, message: 'Manager profile deleted successfully', severity: 'success' });
-      setDeleteDialogOpen(false);
-      setManagerToDelete(null);
-      const nextPage = managers.length === 1 && page > 0 ? page - 1 : page;
-      await loadManagers(nextPage, rowsPerPage);
-      setPage(nextPage);
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Cannot delete manager with existing records';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
-    } finally {
-      setConfirmLoading(false);
-    }
-  }, [loadManagers, managers.length, page, rowsPerPage]);
+  const handleEditManager = useCallback(
+    async (
+      managerId: string,
+      updateData: {
+        isActive?: boolean;
+        permissions?: {
+          canViewSiteLeads?: boolean;
+          canVerifyTutors?: boolean;
+          canCreateLeads?: boolean;
+        };
+      },
+    ) => {
+      try {
+        await managerService.updateManagerProfile(managerId, updateData);
+        setSnackbar({ open: true, message: 'Manager updated', severity: 'success' });
+        setEditModalOpen(false);
+        setSelectedManager(null);
+        loadManagers();
+      } catch (e: any) {
+        const msg = e?.response?.data?.error || e?.message || 'Failed to update manager';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+        throw e;
+      }
+    },
+    [loadManagers],
+  );
+
+  const handleDeleteManager = useCallback(
+    async (managerId: string) => {
+      try {
+        setConfirmLoading(true);
+        await managerService.deleteManagerProfile(managerId);
+        setSnackbar({ open: true, message: 'Manager deleted', severity: 'success' });
+        setDeleteDialogOpen(false);
+        setManagerToDelete(null);
+        const nextPage = managers.length === 1 && page > 0 ? page - 1 : page;
+        await loadManagers(nextPage, rowsPerPage);
+        setPage(nextPage);
+      } catch (e: any) {
+        const msg = e?.response?.data?.error || e?.message || 'Cannot delete manager with existing records';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+      } finally {
+        setConfirmLoading(false);
+      }
+    },
+    [loadManagers, managers.length, page, rowsPerPage],
+  );
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.checked) {
-      const allIds = managers.map((m) => m.id);
-      setSelectedManagers(allIds);
-    } else {
-      setSelectedManagers([]);
-    }
+    setSelectedManagers(event.target.checked ? managers.map((m) => m.id) : []);
   };
 
   const handleSelectOne = (id: string) => {
-    setSelectedManagers((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setSelectedManagers((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   };
-
-  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
-  const [bulkLoading, setBulkLoading] = useState(false);
 
   const handleBulkDelete = async () => {
     setBulkLoading(true);
@@ -221,219 +308,512 @@ const ManagersManagementPage: React.FC = () => {
     setBulkDialogOpen(false);
     setSelectedManagers([]);
     await loadManagers(page, rowsPerPage);
-    setSnackbar({ open: true, message: `Deleted ${success} manager(s). ${failed ? failed + ' failed.' : ''}`, severity: failed ? 'info' : 'success' });
+    setSnackbar({
+      open: true,
+      message: `Deleted ${success} manager(s).${failed ? ` ${failed} failed.` : ''}`,
+      severity: failed ? 'info' : 'success',
+    });
   };
 
   const totalPages = Math.ceil(total / rowsPerPage) || 1;
 
+  // Derived KPIs from current loaded data
+  const activeCount = useMemo(() => managers.filter((m) => m.isActive).length, [managers]);
+  const verifiedCount = useMemo(() => managers.filter((m) => m.verificationStatus === 'VERIFIED').length, [managers]);
+  const totalRevenue = useMemo(
+    () => managers.reduce((sum, m) => sum + Number(m.revenueGenerated || 0), 0),
+    [managers],
+  );
+
   return (
-    <Container maxWidth="xl" sx={{ p: 3 }}>
-      {/* Hero Section */}
+    <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <Box
         sx={{
-          background: 'linear-gradient(135deg, #DD2C00 0%, #BF360C 100%)', // distinct Orange/Red theme for Managers
-          color: 'white',
-          py: { xs: 4, md: 5 },
-          px: { xs: 2, md: 4 },
-          borderRadius: { xs: 0, md: 3 },
-          mb: 4,
-          position: 'relative',
-          overflow: 'hidden',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          alignItems: { xs: 'flex-start', md: 'center' },
-          justifyContent: 'space-between',
-          gap: 2,
+          bgcolor: '#1C3556',
+          px: { xs: 2.5, md: 4 },
+          pt: { xs: 3, md: 3.5 },
+          pb: 0,
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
         }}
       >
-        <Box sx={{ position: 'relative', zIndex: 1 }}>
-          <Typography variant="h4" fontWeight={800} gutterBottom>
-            Managers Management
-          </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.9, maxWidth: 600 }}>
-            Oversee manager profiles, assign permissions, and track team performance.
-          </Typography>
-        </Box>
+        {/* Top row: title + CTA */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 2,
+            mb: 3,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontSize: { xs: 22, md: 26 },
+                fontWeight: 800,
+                letterSpacing: -0.6,
+                color: '#fff',
+                lineHeight: 1.15,
+              }}
+            >
+              Managers
+            </Typography>
+            <Typography
+              sx={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', mt: 0.4, fontWeight: 500 }}
+            >
+              Assign permissions and track team performance
+            </Typography>
+          </Box>
 
-        <Box sx={{ position: 'relative', zIndex: 1 }}>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={<AddIcon sx={{ fontSize: '16px !important' }} />}
             onClick={() => navigate('/register?role=MANAGER')}
             sx={{
-              bgcolor: 'white',
-              color: '#BF360C',
+              bgcolor: '#2D68C4',
+              color: '#fff',
               fontWeight: 700,
-              px: 3,
-              py: 1,
-              '&:hover': {
-                bgcolor: 'rgba(255,255,255,0.9)',
+              fontSize: 13,
+              px: 2.25,
+              py: 0.9,
+              borderRadius: '10px',
+              boxShadow: 'none',
+              flexShrink: 0,
+              transition: TRANSITION,
+              '@media (hover: hover) and (pointer: fine)': {
+                '&:hover': { bgcolor: '#2560B0', boxShadow: 'none' },
               },
+              '&:active': { transform: 'scale(0.97)', boxShadow: 'none' },
             }}
           >
-            Create Manager
+            Add Manager
           </Button>
         </Box>
 
-        {/* Abstract shapes */}
-        <Box sx={{
-          position: 'absolute',
-          top: -20,
-          right: -20,
-          width: 200,
-          height: 200,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-        }} />
-        <Box sx={{
-          position: 'absolute',
-          bottom: -40,
-          left: 40,
-          width: 300,
-          height: 300,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 70%)',
-        }} />
+        {/* KPI strip */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
+          }}
+        >
+          {[
+            { label: 'Total', value: loading ? '-' : total, sub: 'managers' },
+            {
+              label: 'Active',
+              value: loading ? '-' : activeCount,
+              sub: `of ${managers.length} loaded`,
+            },
+            {
+              label: 'Verified',
+              value: loading ? '-' : verifiedCount,
+              sub: `of ${managers.length} loaded`,
+            },
+            {
+              label: 'Revenue',
+              value: loading ? '-' : `₹${totalRevenue >= 100000
+                ? `${(totalRevenue / 100000).toFixed(1)}L`
+                : totalRevenue.toLocaleString()}`,
+              sub: 'generated',
+            },
+          ].map((kpi, i) => (
+            <Box
+              key={kpi.label}
+              sx={{
+                px: { xs: 2, md: 2.5 },
+                py: 1.75,
+                borderTop: '1px solid rgba(255,255,255,0.07)',
+                borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                '&:nth-of-type(odd)': {
+                  borderLeft: { xs: 'none', sm: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none' },
+                },
+                '&:nth-of-type(3)': {
+                  borderLeft: { xs: '1px solid rgba(255,255,255,0.07)', sm: '1px solid rgba(255,255,255,0.07)' },
+                },
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 0.6,
+                  color: 'rgba(255,255,255,0.38)',
+                  textTransform: 'uppercase',
+                  mb: 0.5,
+                }}
+              >
+                {kpi.label}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: { xs: 22, md: 26 },
+                  fontWeight: 800,
+                  color: '#fff',
+                  letterSpacing: -0.5,
+                  lineHeight: 1,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {kpi.value}
+              </Typography>
+              <Typography
+                sx={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', mt: 0.35, fontWeight: 500 }}
+              >
+                {kpi.sub}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
       </Box>
 
-      {error && <Box mb={2}><ErrorAlert error={error} /></Box>}
+      {/* ── Content area ────────────────────────────────────────────────────── */}
+      <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2.5, md: 3 } }}>
 
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2,
-          mb: 4,
-          borderRadius: 2,
-          border: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'background.paper',
-        }}
-      >
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              variant="outlined"
-              placeholder="Search by name or email"
-              InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}
-              onChange={(e) => debouncedSearch(e.target.value)}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <TextField
-              select
-              size="small"
-              label="Status"
-              fullWidth
-              value={isActiveFilter}
-              onChange={(e) => setIsActiveFilter(e.target.value as any)}
-            >
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={2}>
+        {error && <Box mb={2.5}><ErrorAlert error={error} /></Box>}
+
+        {/* ── Filter bar ────────────────────────────────────────────────────── */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1.25,
+            mb: selectedManagers.length > 0 ? 1.5 : 2.5,
+            alignItems: 'center',
+          }}
+        >
+          <TextField
+            size="small"
+            variant="outlined"
+            placeholder="Search name or email..."
+            onChange={(e) => debouncedSearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              flex: '1 1 200px',
+              maxWidth: 320,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '9px',
+                fontSize: 13,
+                bgcolor: '#fff',
+                transition: TRANSITION,
+                '& fieldset': { borderColor: '#E2E8F0' },
+                '&:hover fieldset': { borderColor: '#94A3B8' },
+                '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 },
+              },
+            }}
+          />
+
+          <TextField
+            select
+            size="small"
+            value={isActiveFilter}
+            onChange={(e) => setIsActiveFilter(e.target.value as any)}
+            sx={{
+              minWidth: 130,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '9px',
+                fontSize: 13,
+                bgcolor: '#fff',
+                '& fieldset': { borderColor: '#E2E8F0' },
+                '&:hover fieldset': { borderColor: '#94A3B8' },
+              },
+            }}
+          >
+            <MenuItem value="all">All status</MenuItem>
+            <MenuItem value="active">Active</MenuItem>
+            <MenuItem value="inactive">Inactive</MenuItem>
+          </TextField>
+
+          {(isActiveFilter !== 'all' || searchQuery) && (
             <Button
-              fullWidth
-              variant="outlined"
-              color="inherit"
-              onClick={() => {
-                setIsActiveFilter('all');
-                setSearchQuery('');
+              size="small"
+              variant="text"
+              onClick={() => { setIsActiveFilter('all'); setSearchQuery(''); }}
+              sx={{
+                color: 'text.secondary',
+                fontSize: 13,
+                fontWeight: 500,
+                px: 1.5,
+                borderRadius: '8px',
+                transition: TRANSITION,
+                '&:hover': { bgcolor: '#F1F5F9', color: 'text.primary' },
               }}
             >
               Clear
             </Button>
-          </Grid>
-        </Grid>
-      </Paper>
+          )}
+        </Box>
 
+      {/* ── Bulk action bar ─────────────────────────────────────────────────── */}
       {selectedManagers.length > 0 && (
-        <Box bgcolor="primary.light" p={2} borderRadius={1} mb={2} display="flex" alignItems="center" justifyContent="space-between">
-          <Typography>{selectedManagers.length} manager(s) selected</Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            py: 1.25,
+            mb: 2,
+            borderRadius: '10px',
+            bgcolor: '#EFF6FF',
+            border: '1px solid #BFDBFE',
+          }}
+        >
+          <Typography fontSize={13} fontWeight={600} color="primary.main">
+            {selectedManagers.length} selected
+          </Typography>
           <Box display="flex" gap={1}>
-            <Button color="error" variant="contained" onClick={() => setBulkDialogOpen(true)}>Bulk Delete</Button>
-            <Button variant="outlined" onClick={() => setSelectedManagers([])}>Clear Selection</Button>
+            <Button
+              size="small"
+              color="error"
+              variant="contained"
+              onClick={() => setBulkDialogOpen(true)}
+              sx={{
+                fontWeight: 700,
+                fontSize: 12,
+                px: 2,
+                borderRadius: '8px',
+                boxShadow: 'none',
+                transition: TRANSITION,
+                '&:active': { transform: 'scale(0.97)' },
+              }}
+            >
+              Delete
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => setSelectedManagers([])}
+              sx={{
+                fontWeight: 600,
+                fontSize: 12,
+                color: 'text.secondary',
+                borderRadius: '8px',
+                transition: TRANSITION,
+              }}
+            >
+              Deselect
+            </Button>
           </Box>
         </Box>
       )}
 
-      {!isXs ? (
-        <Paper elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 750 }}>
+      {/* ── Desktop table ────────────────────────────────────────────────────── */}
+      {!isMobile ? (
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+          }}
+        >
+          <TableContainer>
+            <Table size="small" sx={{ minWidth: 780 }}>
               <TableHead>
-                <TableRow sx={{ bgcolor: 'grey.100', '& .MuiTableCell-root': { color: 'text.primary', fontWeight: 700, borderBottom: '2px solid', borderColor: 'divider' } }}>
-                  <TableCell padding="checkbox">
+                <TableRow
+                  sx={{
+                    bgcolor: '#F8FAFC',
+                    '& .MuiTableCell-root': {
+                      color: '#64748B',
+                      fontWeight: 700,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      textTransform: 'uppercase',
+                      py: 1.25,
+                      borderBottom: '1px solid #E2E8F0',
+                    },
+                  }}
+                >
+                  <TableCell padding="checkbox" sx={{ pl: 2 }}>
                     <Checkbox
-                      indeterminate={selectedManagers.length > 0 && selectedManagers.length < managers.length}
-                      checked={managers.length > 0 && selectedManagers.length === managers.length}
+                      size="small"
+                      indeterminate={
+                        selectedManagers.length > 0 &&
+                        selectedManagers.length < managers.length
+                      }
+                      checked={
+                        managers.length > 0 &&
+                        selectedManagers.length === managers.length
+                      }
                       onChange={handleSelectAll}
+                      sx={{ color: '#CBD5E1' }}
                     />
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Leads Created</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Classes Converted</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Revenue Generated</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Verification</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Actions</TableCell>
+                  <TableCell>Manager</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell align="right">Leads</TableCell>
+                  <TableCell align="right">Converted</TableCell>
+                  <TableCell align="right">Revenue</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Verification</TableCell>
+                  <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
+
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center"><CircularProgress size={24} /></TableCell>
+                    <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                      <CircularProgress size={22} thickness={4} />
+                    </TableCell>
                   </TableRow>
                 ) : managers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">No managers found</TableCell>
+                    <TableCell colSpan={9} align="center" sx={{ py: 6, color: 'text.disabled', fontSize: 14 }}>
+                      No managers found
+                    </TableCell>
                   </TableRow>
                 ) : (
                   managers.map((m) => (
-                    <TableRow key={m.id} hover>
-                      <TableCell padding="checkbox">
-                        <Checkbox checked={selectedManagers.includes(m.id)} onChange={() => handleSelectOne(m.id)} />
+                    <TableRow
+                      key={m.id}
+                      sx={{
+                        transition: TRANSITION,
+                        '& .MuiTableCell-root': {
+                          py: 1.25,
+                          borderBottom: '1px solid #F1F5F9',
+                          fontSize: 13,
+                        },
+                        '@media (hover: hover) and (pointer: fine)': {
+                          '&:hover': { bgcolor: '#F8FAFC' },
+                        },
+                      }}
+                    >
+                      <TableCell padding="checkbox" sx={{ pl: 2 }}>
+                        <Checkbox
+                          size="small"
+                          checked={selectedManagers.includes(m.id)}
+                          onChange={() => handleSelectOne(m.id)}
+                          sx={{ color: '#CBD5E1' }}
+                        />
                       </TableCell>
+
                       <TableCell>
-                        <Link component={RouterLink} to={`/manager-profile/${m.id || (m as any)._id}`} sx={{ fontWeight: 600, color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-                          {m.user?.name}
-                        </Link>
+                        <Box display="flex" alignItems="center" gap={1.25}>
+                          <Avatar
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              bgcolor: avatarColor(m.user?.name),
+                              flexShrink: 0,
+                            }}
+                          >
+                            {initials(m.user?.name)}
+                          </Avatar>
+                          <Link
+                            component={RouterLink}
+                            to={`/manager-profile/${m.id || (m as any)._id}`}
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: 13,
+                              color: 'text.primary',
+                              textDecoration: 'none',
+                              transition: TRANSITION,
+                              '@media (hover: hover) and (pointer: fine)': {
+                                '&:hover': { color: 'primary.main' },
+                              },
+                            }}
+                          >
+                            {m.user?.name}
+                          </Link>
+                        </Box>
                       </TableCell>
-                      <TableCell>{m.user?.email}</TableCell>
-                      <TableCell align="right">{m.classLeadsCreated}</TableCell>
-                      <TableCell align="right">{m.classesConverted}</TableCell>
-                      <TableCell align="right">₹{Number(m.revenueGenerated || 0).toLocaleString()}</TableCell>
+
+                      <TableCell sx={{ color: 'text.secondary' }}>
+                        {m.user?.email}
+                      </TableCell>
+
+                      <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {m.classLeadsCreated}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {m.classesConverted}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        ₹{Number(m.revenueGenerated || 0).toLocaleString()}
+                      </TableCell>
+
                       <TableCell>
-                        <Chip label={m.isActive ? 'Active' : 'Inactive'} color={m.isActive ? 'success' : 'default'} size="small" />
+                        <StatusChip active={m.isActive} />
                       </TableCell>
+
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={1}>
-                          <Chip
-                            label={m.verificationStatus || 'PENDING'}
-                            color={m.verificationStatus === 'VERIFIED' ? 'success' : m.verificationStatus === 'REJECTED' ? 'error' : 'warning'}
-                            size="small"
-                          />
+                          <VerifChip status={m.verificationStatus} />
                           {m.verificationStatus !== 'VERIFIED' && (
                             <Button
                               size="small"
-                              variant="outlined"
-                              startIcon={<VerifiedIcon />}
                               component={RouterLink}
                               to={`/admin/verify-manager/${m.id}`}
+                              startIcon={<VerifiedIcon sx={{ fontSize: '14px !important' }} />}
+                              sx={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                px: 1.25,
+                                py: 0.4,
+                                borderRadius: '7px',
+                                color: 'primary.main',
+                                border: '1px solid #BFDBFE',
+                                bgcolor: '#EFF6FF',
+                                transition: TRANSITION,
+                                minWidth: 0,
+                                '@media (hover: hover) and (pointer: fine)': {
+                                  '&:hover': { bgcolor: '#DBEAFE' },
+                                },
+                                '&:active': { transform: 'scale(0.97)' },
+                              }}
                             >
                               Verify
                             </Button>
                           )}
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <IconButton onClick={() => { setSelectedManager(m); setEditModalOpen(true); }} aria-label="Edit manager"><EditIcon /></IconButton>
-                        <IconButton onClick={() => { setManagerToDelete(m); setDeleteDialogOpen(true); }} aria-label="Delete manager" color="error"><DeleteIcon /></IconButton>
+
+                      <TableCell align="right" sx={{ pr: 1.5 }}>
+                        <Box display="flex" justifyContent="flex-end" gap={0.5}>
+                          <IconButton
+                            size="small"
+                            onClick={() => { setSelectedManager(m); setEditModalOpen(true); }}
+                            aria-label="Edit manager"
+                            sx={{
+                              color: 'text.secondary',
+                              borderRadius: '8px',
+                              transition: TRANSITION,
+                              '@media (hover: hover) and (pointer: fine)': {
+                                '&:hover': { color: 'primary.main', bgcolor: '#EFF6FF' },
+                              },
+                              '&:active': { transform: 'scale(0.9)' },
+                            }}
+                          >
+                            <EditIcon sx={{ fontSize: 17 }} />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => { setManagerToDelete(m); setDeleteDialogOpen(true); }}
+                            aria-label="Delete manager"
+                            sx={{
+                              color: 'text.disabled',
+                              borderRadius: '8px',
+                              transition: TRANSITION,
+                              '@media (hover: hover) and (pointer: fine)': {
+                                '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' },
+                              },
+                              '&:active': { transform: 'scale(0.9)' },
+                            }}
+                          >
+                            <DeleteIcon sx={{ fontSize: 17 }} />
+                          </IconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))
@@ -441,76 +821,242 @@ const ManagersManagementPage: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+
           <TablePagination
             component="div"
             count={total}
             page={page}
             onPageChange={(_e, newPage) => { setPage(newPage); loadManagers(newPage, rowsPerPage); }}
             rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => { const v = parseInt(e.target.value, 10); setRowsPerPage(v); setPage(0); loadManagers(0, v); }}
+            onRowsPerPageChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setRowsPerPage(v);
+              setPage(0);
+              loadManagers(0, v);
+            }}
             rowsPerPageOptions={[5, 10, 25, 50]}
+            sx={{
+              borderTop: '1px solid #F1F5F9',
+              '& .MuiTablePagination-toolbar': { fontSize: 13 },
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                fontSize: 13,
+                color: 'text.secondary',
+              },
+            }}
           />
         </Paper>
       ) : (
+        /* ── Mobile card stack ─────────────────────────────────────────────── */
         <Stack spacing={1.5}>
-          {loading ? <LoadingSpinner /> : managers.length === 0 ? (
-            <Typography>No managers found</Typography>
-          ) : managers.map((m) => (
-            <Card key={m.id}>
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                  <Box>
-                    <Checkbox checked={selectedManagers.includes(m.id)} onChange={() => handleSelectOne(m.id)} />
-                    <Link component={RouterLink} to={`/manager-profile/${m.id || (m as any)._id}`} sx={{ fontWeight: 600, color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-                      <Typography variant="subtitle1" fontWeight={600}>{m.user?.name}</Typography>
+          {loading ? (
+            <Box textAlign="center" py={5}>
+              <CircularProgress size={22} thickness={4} />
+            </Box>
+          ) : managers.length === 0 ? (
+            <Box textAlign="center" py={6}>
+              <Typography color="text.disabled" fontSize={14}>No managers found</Typography>
+            </Box>
+          ) : (
+            managers.map((m) => (
+              <Paper
+                key={m.id}
+                elevation={0}
+                sx={{
+                  borderRadius: '12px',
+                  border: '1px solid #E2E8F0',
+                  overflow: 'hidden',
+                  transition: TRANSITION,
+                }}
+              >
+                {/* Card header */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    px: 2,
+                    pt: 2,
+                    pb: 1.5,
+                  }}
+                >
+                  <Checkbox
+                    size="small"
+                    checked={selectedManagers.includes(m.id)}
+                    onChange={() => handleSelectOne(m.id)}
+                    sx={{ color: '#CBD5E1', p: 0 }}
+                  />
+                  <Avatar
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      bgcolor: avatarColor(m.user?.name),
+                      flexShrink: 0,
+                    }}
+                  >
+                    {initials(m.user?.name)}
+                  </Avatar>
+                  <Box flex={1} minWidth={0}>
+                    <Link
+                      component={RouterLink}
+                      to={`/manager-profile/${m.id || (m as any)._id}`}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: 14,
+                        color: 'text.primary',
+                        textDecoration: 'none',
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {m.user?.name}
                     </Link>
-                    <Typography variant="body2" color="text.secondary">{m.user?.email}</Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      fontSize={12}
+                      sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {m.user?.email}
+                    </Typography>
                   </Box>
-                  <Box display="flex" gap={1}>
-                    <IconButton onClick={() => { setSelectedManager(m); setEditModalOpen(true); }}><EditIcon /></IconButton>
-                    <IconButton color="error" onClick={() => { setManagerToDelete(m); setDeleteDialogOpen(true); }}><DeleteIcon /></IconButton>
+                  <Box display="flex" gap={0.5} flexShrink={0}>
+                    <IconButton
+                      size="small"
+                      onClick={() => { setSelectedManager(m); setEditModalOpen(true); }}
+                      sx={{
+                        borderRadius: '8px',
+                        color: 'text.secondary',
+                        transition: TRANSITION,
+                        '&:active': { transform: 'scale(0.9)', color: 'primary.main' },
+                      }}
+                    >
+                      <EditIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={() => { setManagerToDelete(m); setDeleteDialogOpen(true); }}
+                      sx={{
+                        borderRadius: '8px',
+                        color: 'text.disabled',
+                        transition: TRANSITION,
+                        '&:active': { transform: 'scale(0.9)', color: '#DC2626' },
+                      }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
                   </Box>
                 </Box>
-                <Divider sx={{ my: 1 }} />
-                <Grid container spacing={1}>
-                  <Grid item xs={6}><Chip label={m.isActive ? 'Active' : 'Inactive'} color={m.isActive ? 'success' : 'default'} size="small" /></Grid>
-                  <Grid item xs={6}>
-                    <Chip
-                      label={m.verificationStatus || 'PENDING'}
-                      color={m.verificationStatus === 'VERIFIED' ? 'success' : m.verificationStatus === 'REJECTED' ? 'error' : 'warning'}
-                      size="small"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Box display="flex" gap={1}>
-                      {m.verificationStatus !== 'VERIFIED' && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          fullWidth
-                          startIcon={<VerifiedIcon />}
-                          component={RouterLink}
-                          to={`/admin/verify-manager/${m.id}`}
-                        >
-                          Verify
-                        </Button>
-                      )}
-                      <IconButton onClick={() => { setSelectedManager(m); setEditModalOpen(true); }}><EditIcon /></IconButton>
-                      <IconButton color="error" onClick={() => { setManagerToDelete(m); setDeleteDialogOpen(true); }}><DeleteIcon /></IconButton>
+
+                <Divider sx={{ borderColor: '#F1F5F9' }} />
+
+                {/* Metrics row */}
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    px: 2,
+                    py: 1.5,
+                    gap: 1,
+                  }}
+                >
+                  {[
+                    { label: 'Leads', value: m.classLeadsCreated },
+                    { label: 'Converted', value: m.classesConverted },
+                    { label: 'Revenue', value: `₹${Number(m.revenueGenerated || 0).toLocaleString()}` },
+                  ].map((stat) => (
+                    <Box key={stat.label} textAlign="center">
+                      <Typography sx={{ fontWeight: 700, fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>
+                        {stat.value}
+                      </Typography>
+                      <Typography fontSize={10} color="text.disabled" fontWeight={600} letterSpacing={0.3}>
+                        {stat.label.toUpperCase()}
+                      </Typography>
                     </Box>
-                  </Grid>
-                  <Grid item xs={4}><Typography variant="body2">Leads: {m.classLeadsCreated}</Typography></Grid>
-                  <Grid item xs={4}><Typography variant="body2">Converted: {m.classesConverted}</Typography></Grid>
-                  <Grid item xs={4}><Typography variant="body2">Revenue: ₹{Number(m.revenueGenerated || 0).toLocaleString()}</Typography></Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          ))}
-          <Box display="flex" justifyContent="center" mt={2}>
-            <Typography>Page {page + 1} of {totalPages}</Typography>
-          </Box>
+                  ))}
+                </Box>
+
+                <Divider sx={{ borderColor: '#F1F5F9' }} />
+
+                {/* Status + verify row */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    px: 2,
+                    py: 1.25,
+                    gap: 1,
+                  }}
+                >
+                  <Box display="flex" gap={1} alignItems="center">
+                    <StatusChip active={m.isActive} />
+                    <VerifChip status={m.verificationStatus} />
+                  </Box>
+                  {m.verificationStatus !== 'VERIFIED' && (
+                    <Button
+                      size="small"
+                      component={RouterLink}
+                      to={`/admin/verify-manager/${m.id}`}
+                      startIcon={<VerifiedIcon sx={{ fontSize: '14px !important' }} />}
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: '8px',
+                        color: 'primary.main',
+                        border: '1px solid #BFDBFE',
+                        bgcolor: '#EFF6FF',
+                        transition: TRANSITION,
+                        '&:active': { transform: 'scale(0.97)' },
+                      }}
+                    >
+                      Verify
+                    </Button>
+                  )}
+                </Box>
+              </Paper>
+            ))
+          )}
+
+          {/* Mobile pagination */}
+          {managers.length > 0 && (
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              pt={1}
+            >
+              <Button
+                size="small"
+                disabled={page === 0}
+                onClick={() => { const p = page - 1; setPage(p); loadManagers(p, rowsPerPage); }}
+                sx={{ fontSize: 12, borderRadius: '8px', color: 'text.secondary', transition: TRANSITION }}
+              >
+                Previous
+              </Button>
+              <Typography fontSize={12} color="text.secondary">
+                {page + 1} / {totalPages}
+              </Typography>
+              <Button
+                size="small"
+                disabled={page >= totalPages - 1}
+                onClick={() => { const p = page + 1; setPage(p); loadManagers(p, rowsPerPage); }}
+                sx={{ fontSize: 12, borderRadius: '8px', color: 'text.secondary', transition: TRANSITION }}
+              >
+                Next
+              </Button>
+            </Box>
+          )}
         </Stack>
       )}
+
+      {/* ── Modals ──────────────────────────────────────────────────────────── */}
+      </Box>{/* end content area */}
 
       <CreateManagerModal
         open={createModalOpen}
@@ -527,14 +1073,12 @@ const ManagersManagementPage: React.FC = () => {
         onUpdate={handleEditManager}
       />
 
-
-
       <ConfirmDialog
         open={deleteDialogOpen}
         onClose={() => { setDeleteDialogOpen(false); setManagerToDelete(null); }}
-        onConfirm={async () => { if (managerToDelete) { await handleDeleteManager(managerToDelete.id); } }}
-        title="Delete Manager Profile"
-        message={`Are you sure you want to delete ${managerToDelete?.user?.name}'s manager profile? This action cannot be undone.`}
+        onConfirm={async () => { if (managerToDelete) await handleDeleteManager(managerToDelete.id); }}
+        title="Delete Manager"
+        message={`Delete ${managerToDelete?.user?.name}'s manager profile? This cannot be undone.`}
         confirmText="Delete"
         severity="error"
         loading={confirmLoading}
@@ -544,8 +1088,8 @@ const ManagersManagementPage: React.FC = () => {
         open={bulkDialogOpen}
         onClose={() => setBulkDialogOpen(false)}
         onConfirm={handleBulkDelete}
-        title="Bulk Delete Managers"
-        message={`Are you sure you want to delete ${selectedManagers.length} manager(s)? This action cannot be undone.`}
+        title="Delete Managers"
+        message={`Delete ${selectedManagers.length} manager(s)? This cannot be undone.`}
         confirmText={bulkLoading ? 'Deleting...' : 'Delete'}
         severity="error"
         loading={bulkLoading}
@@ -557,9 +1101,8 @@ const ManagersManagementPage: React.FC = () => {
         severity={snackbar.severity}
         onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
       />
-    </Container>
+    </Box>
   );
 };
 
 export default ManagersManagementPage;
-

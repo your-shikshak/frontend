@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
-  Container, Box, Typography, IconButton, alpha,
+  Container, Box, Typography, IconButton, alpha, Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
-import { useNavigate } from 'react-router-dom';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ClassLeadForm from '../../components/classLeads/ClassLeadForm';
 import { IClassLeadFormData } from '../../types';
 import leadService from '../../services/leadService';
@@ -17,7 +18,10 @@ import { useErrorDialog } from '../../hooks/useErrorDialog';
 
 export default function CreateClassLeadPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  // Prefill data injected from ClassRequestsPage via navigate state
+  const prefill = (location.state as any)?.prefill ?? null;
   const [loading, setLoading] = useState(false);
   const { error, showError, clearError, handleError } = useErrorDialog();
   const [snack, setSnack] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({ open: false, message: '', severity: 'success' });
@@ -111,7 +115,22 @@ export default function CreateClassLeadPage() {
 
       {/* ── Form ─────────────────────────────────────────────────────── */}
       <Container maxWidth="md" sx={{ py: { xs: 1.5, sm: 3 } }}>
-        <ClassLeadForm onSubmit={handleSubmit} loading={loading} submitButtonText="Create Lead" />
+        {prefill && (
+          <Alert
+            severity="info"
+            icon={<InfoOutlinedIcon fontSize="small" />}
+            sx={{ mb: 2.5, borderRadius: 2, fontSize: '0.84rem' }}
+          >
+            <strong>Prefilled from a parent request.</strong> Please review and confirm all details
+            below before creating the lead — edit any field as needed.
+          </Alert>
+        )}
+        <ClassLeadForm
+          onSubmit={handleSubmit}
+          loading={loading}
+          submitButtonText="Create Lead"
+          initialData={prefill}
+        />
       </Container>
 
       <SnackbarNotification open={snack.open} message={snack.message} severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))} />

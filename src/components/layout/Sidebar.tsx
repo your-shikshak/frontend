@@ -53,6 +53,8 @@ const iconForLabel = (label: string) => {
       return <DashboardIcon />;
     case 'Timetable':
       return <ScheduleIcon />;
+    case 'Class Requests':
+      return <AssignmentIcon />;
     case 'Class Leads':
       return <AssignmentIcon />;
     case 'Test Scheduling':

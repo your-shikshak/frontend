@@ -2,44 +2,39 @@ import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
-  Container,
-  Grid,
   IconButton,
   TextField,
   Typography,
-  Tabs,
-  Tab,
   Paper,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  useTheme,
-  alpha,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  ListItemSecondaryAction,
   CircularProgress,
   Stack,
-  Chip
+  InputAdornment,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import CategoryIcon from '@mui/icons-material/Category';
-import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 import { OptionItem, getOptionTypes } from '@/services/optionsService';
 import { useOptions } from '@/hooks/useOptions';
 import SnackbarNotification from '@/components/common/SnackbarNotification';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+const T = `all 150ms ${EASE}`;
+
 const OPTION_TYPES = [
-  { value: 'CURRICULUM', label: 'Curriculum (Hierarchy)' },
+  { value: 'CURRICULUM', label: 'Curriculum' },
   { value: 'CITY', label: 'Cities' },
-  { value: 'EXTRACURRICULAR_ACTIVITY', label: 'Extracurricular Activities' },
+  { value: 'EXTRACURRICULAR_ACTIVITY', label: 'Extracurricular' },
 ];
 
 interface SnackbarState {
@@ -48,8 +43,7 @@ interface SnackbarState {
   severity: 'success' | 'error' | 'info' | 'warning';
 }
 
-// --- Sub-Component: Column List ---
-// Renders a single column in the hierarchy (e.g. Board List or Class List)
+// ─── OptionColumn ─────────────────────────────────────────────────────────────
 interface OptionColumnProps {
   title: string;
   type: string;
@@ -64,50 +58,37 @@ interface OptionColumnProps {
 const OptionColumn: React.FC<OptionColumnProps> = ({
   title, type, parentId, selectedId, onSelect, disabled, onSaveError, onSaveSuccess
 }) => {
-  const theme = useTheme();
-  // Fetch options for this column. Only fetch if not disabled (meaning parent is selected if required)
   const { options: fetchedOptions, loading: fetchedLoading, refetch } = useOptions(type, parentId);
-
-  // If disabled (e.g. no parent selected), force empty list so we don't show "All items"
   const options = disabled ? [] : fetchedOptions;
   const loading = disabled ? false : fetchedLoading;
 
-  // Local state for inline creation/editing
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
-  const [extraValue, setExtraValue] = useState(''); // for metadata.Link
-  const [cityCodeValue, setCityCodeValue] = useState(''); // for metadata.cityCode
-  const [sortOrderValue, setSortOrderValue] = useState<number | string>(''); // NEW
+  const [extraValue, setExtraValue] = useState('');
+  const [cityCodeValue, setCityCodeValue] = useState('');
+  const [sortOrderValue, setSortOrderValue] = useState<number | string>('');
   const [saving, setSaving] = useState(false);
 
-  // Deletion Multi-step Confirmation
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deletionStep, setDeletionStep] = useState(1);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingLoading, setDeletingLoading] = useState(false);
-
-  // Save Confirmation
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
 
   useEffect(() => {
-    // If disabled (e.g. parent deselected), clear local editing state
-    if (disabled) {
-      setIsAdding(false);
-      setEditingId(null);
-    }
+    if (disabled) { setIsAdding(false); setEditingId(null); }
   }, [disabled]);
+
+  const resetForm = () => {
+    setIsAdding(false); setEditingId(null);
+    setInputValue(''); setExtraValue(''); setCityCodeValue(''); setSortOrderValue('');
+  };
 
   const handleSave = async () => {
     const trimmed = inputValue.trim();
     if (!trimmed) return;
-
-    // If editing, show confirmation first
-    if (editingId && !confirmSaveOpen) {
-      setConfirmSaveOpen(true);
-      return;
-    }
-
+    if (editingId && !confirmSaveOpen) { setConfirmSaveOpen(true); return; }
     try {
       setSaving(true);
       const svc = await import('@/services/optionsService');
@@ -116,28 +97,19 @@ const OptionColumn: React.FC<OptionColumnProps> = ({
         label: trimmed,
         value: trimmed.toUpperCase().replace(/\s+/g, '_'),
         sortOrder: sortOrderValue === '' ? 0 : Number(sortOrderValue),
-        parent: parentId, // Link to the parent from the previous column
+        parent: parentId,
         metadata: type === 'CITY'
           ? { whatsappLink: extraValue.trim(), cityCode: cityCodeValue.trim().toUpperCase() }
           : {}
       };
-
       await svc.createOrUpdateOption(editingId || undefined, payload);
-
-      onSaveSuccess(editingId ? 'Updated successfully' : 'Created successfully');
-      setInputValue('');
-      setExtraValue('');
-      setCityCodeValue('');
-      setSortOrderValue('');
-      setIsAdding(false);
-      setEditingId(null);
+      onSaveSuccess(editingId ? 'Updated' : 'Created');
+      resetForm();
       setConfirmSaveOpen(false);
       refetch();
     } catch (err: any) {
       onSaveError(err?.message || 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const handleStartEdit = (e: React.MouseEvent, item: OptionItem) => {
@@ -150,46 +122,24 @@ const OptionColumn: React.FC<OptionColumnProps> = ({
     setIsAdding(false);
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setDeletingId(id);
-    setDeletionStep(1);
-    setConfirmDeleteOpen(true);
+    setDeletingId(id); setDeletionStep(1); setConfirmDeleteOpen(true);
   };
 
   const performDeleteAction = async () => {
-    if (deletionStep < 3) {
-      setDeletionStep(prev => prev + 1);
-      return;
-    }
-
+    if (deletionStep < 3) { setDeletionStep((p) => p + 1); return; }
     if (!deletingId) return;
     try {
       setDeletingLoading(true);
       const svc = await import('@/services/optionsService');
       await svc.deleteOption(deletingId);
-      onSaveSuccess('Deleted successfully');
-      setConfirmDeleteOpen(false);
-      setDeletingId(null);
-      setDeletionStep(1);
+      onSaveSuccess('Deleted');
+      setConfirmDeleteOpen(false); setDeletingId(null); setDeletionStep(1);
       refetch();
     } catch (err: any) {
       onSaveError(err?.message || 'Failed to delete');
-    } finally {
-      setDeletingLoading(false);
-    }
-  };
-
-  const getDeleteTitle = () => {
-    if (deletionStep === 1) return "First Confirmation";
-    if (deletionStep === 2) return "Second Confirmation (Impact)";
-    return "FINAL CONFIRMATION";
-  };
-
-  const getDeleteMessage = () => {
-    if (deletionStep === 1) return `Are you sure you want to delete this ${title.toLowerCase()}?`;
-    if (deletionStep === 2) return `Warning: Deleting this item will also remove all its children (if any) in the hierarchy. This is very destructive. Are you REALLY sure?`;
-    return `FINAL WARNING: Once deleted, this data and all associated connections cannot be recovered. Click confirm one last time to proceed.`;
+    } finally { setDeletingLoading(false); }
   };
 
   const isFormOpen = isAdding || !!editingId;
@@ -198,171 +148,226 @@ const OptionColumn: React.FC<OptionColumnProps> = ({
     <Paper
       elevation={0}
       sx={{
-        height: '65vh',
+        height: '62vh',
         display: 'flex',
         flexDirection: 'column',
         border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 2,
+        borderColor: disabled ? '#F1F5F9' : '#E2E8F0',
+        borderRadius: '12px',
         overflow: 'hidden',
-        bgcolor: disabled ? alpha(theme.palette.action.disabledBackground, 0.1) : 'background.paper',
-        opacity: disabled ? 0.6 : 1,
-        transition: 'all 0.2s'
+        bgcolor: disabled ? '#FAFAFA' : '#fff',
+        opacity: disabled ? 0.55 : 1,
+        transition: T,
       }}
     >
-      {/* Header */}
+      {/* Column header */}
       <Box
         sx={{
-          p: 2,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          bgcolor: alpha(theme.palette.primary.main, 0.05),
+          px: 2, py: 1.5,
+          borderBottom: '1px solid #F1F5F9',
+          bgcolor: '#F8FAFC',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexShrink: 0,
         }}
       >
-        <Typography variant="subtitle1" fontWeight={700} color="primary.main">
+        <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
           {title}
         </Typography>
         <IconButton
           size="small"
-          color="primary"
           disabled={disabled || isFormOpen}
-          onClick={() => {
-            setIsAdding(true);
-            setInputValue('');
-            setExtraValue(''); // Reset link field for new city
-            setCityCodeValue('');
-            setSortOrderValue('');
+          onClick={() => { setIsAdding(true); setInputValue(''); setExtraValue(''); setCityCodeValue(''); setSortOrderValue(''); }}
+          sx={{
+            width: 26, height: 26, borderRadius: '7px',
+            color: disabled || isFormOpen ? 'text.disabled' : 'primary.main',
+            transition: T,
+            '@media (hover: hover) and (pointer: fine)': {
+              '&:hover:not(:disabled)': { bgcolor: '#EFF6FF' },
+            },
+            '&:active': { transform: 'scale(0.9)' },
           }}
         >
-          <AddIcon fontSize="small" />
+          <AddIcon sx={{ fontSize: 16 }} />
         </IconButton>
       </Box>
 
-      {/* Inline Form */}
+      {/* Inline form */}
       {isFormOpen && (
-        <Box p={2} borderBottom="1px solid" borderColor="divider" bgcolor="action.hover">
-          <TextField
-            autoFocus
-            fullWidth
-            size="small"
-            placeholder="Enter Name"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            sx={{ mb: 1, bgcolor: 'white' }}
-          />
-          <TextField
-            fullWidth
-            type="number"
-            size="small"
-            placeholder="Sort Order (optional)"
-            value={sortOrderValue}
-            onChange={(e) => setSortOrderValue(e.target.value)}
-            sx={{ mb: 1, bgcolor: 'white' }}
-          />
-          {type.toUpperCase() === 'CITY' && (
+        <Box sx={{ px: 2, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC', flexShrink: 0 }}>
+          <Stack spacing={1.25}>
             <TextField
-              fullWidth
+              autoFocus
               size="small"
-              placeholder="WhatsApp Group Link"
-              value={extraValue}
-              onChange={(e) => setExtraValue(e.target.value)}
-              sx={{ mb: 1, bgcolor: 'white' }}
+              placeholder="Name"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') resetForm(); }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px', fontSize: 13, bgcolor: '#fff',
+                  '& fieldset': { borderColor: '#E2E8F0' },
+                  '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 },
+                },
+              }}
             />
-          )}
-          {type.toUpperCase() === 'CITY' && (
             <TextField
-              fullWidth
-              size="small"
-              placeholder="City Code (e.g. BPL)"
-              value={cityCodeValue}
-              onChange={(e) => setCityCodeValue(e.target.value)}
-              sx={{ mb: 1, bgcolor: 'white' }}
+              size="small" type="number" placeholder="Sort order (optional)"
+              value={sortOrderValue}
+              onChange={(e) => setSortOrderValue(e.target.value)}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px', fontSize: 13, bgcolor: '#fff',
+                  '& fieldset': { borderColor: '#E2E8F0' },
+                },
+              }}
             />
-          )}
-          <Stack direction="row" spacing={1} justifyContent="flex-end">
-            <Button size="small" onClick={() => { setIsAdding(false); setEditingId(null); setExtraValue(''); setCityCodeValue(''); setSortOrderValue(''); }}>Cancel</Button>
-            <Button size="small" variant="contained" disabled={saving || !inputValue.trim()} onClick={handleSave}>
-              {saving ? '...' : 'Save'}
-            </Button>
+            {type.toUpperCase() === 'CITY' && (
+              <>
+                <TextField
+                  size="small" placeholder="WhatsApp group link"
+                  value={extraValue}
+                  onChange={(e) => setExtraValue(e.target.value)}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', fontSize: 13, bgcolor: '#fff', '& fieldset': { borderColor: '#E2E8F0' } } }}
+                />
+                <TextField
+                  size="small" placeholder="City code (e.g. BPL)"
+                  value={cityCodeValue}
+                  onChange={(e) => setCityCodeValue(e.target.value)}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px', fontSize: 13, bgcolor: '#fff', '& fieldset': { borderColor: '#E2E8F0' } } }}
+                />
+              </>
+            )}
+            <Box display="flex" justifyContent="flex-end" gap={0.75}>
+              <Button
+                size="small" onClick={resetForm}
+                sx={{ fontSize: 12, fontWeight: 600, color: 'text.secondary', borderRadius: '7px', px: 1.5, transition: T }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="small" variant="contained"
+                disabled={saving || !inputValue.trim()}
+                onClick={handleSave}
+                sx={{ fontSize: 12, fontWeight: 700, borderRadius: '7px', px: 1.75, boxShadow: 'none', transition: T, '&:active': { transform: 'scale(0.97)' } }}
+              >
+                {saving ? <CircularProgress size={12} color="inherit" /> : (editingId ? 'Update' : 'Add')}
+              </Button>
+            </Box>
           </Stack>
         </Box>
       )}
 
-      {/* List */}
-      <List sx={{ flexGrow: 1, overflowY: 'auto', py: 0 }}>
+      {/* Item list */}
+      <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
         {loading ? (
-          <Box display="flex" justifyContent="center" p={4}><CircularProgress size={20} /></Box>
+          <Box display="flex" justifyContent="center" pt={4}>
+            <CircularProgress size={20} thickness={4} />
+          </Box>
         ) : options.length === 0 ? (
-          <Box p={3} textAlign="center">
-            <Typography variant="body2" color="text.secondary">
-              {disabled ? 'Select parent first' : 'No items found'}
+          <Box px={2} py={3} textAlign="center">
+            <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>
+              {disabled ? 'Select parent first' : 'No items yet'}
             </Typography>
           </Box>
         ) : (
-          options.map((opt) => (
-            <ListItem
-              key={opt._id}
-              disablePadding
-              sx={{
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-                '&.Mui-selected': {
-                  bgcolor: alpha(theme.palette.primary.main, 0.1),
-                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.15) },
-                  borderLeft: `4px solid ${theme.palette.primary.main}`
-                }
-              }}
-              secondaryAction={
-                <Box>
-                  <IconButton size="small" onClick={(e) => handleStartEdit(e, opt)}>
-                    <EditIcon fontSize="small" sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  <IconButton size="small" onClick={(e) => handleDelete(e, opt._id)} color="error">
-                    <DeleteIcon fontSize="small" sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  {selectedId === opt._id && (
-                    <ArrowForwardIosIcon fontSize="small" sx={{ fontSize: 12, ml: 1, color: 'primary.main' }} />
+          options.map((opt) => {
+            const isSelected = selectedId === opt._id;
+            return (
+              <Box
+                key={opt._id}
+                onClick={() => !disabled && onSelect(opt)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  px: 2, py: 1.1,
+                  cursor: disabled ? 'default' : 'pointer',
+                  borderBottom: '1px solid #F8FAFC',
+                  bgcolor: isSelected ? '#EFF6FF' : 'transparent',
+                  transition: T,
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': { bgcolor: isSelected ? '#DBEAFE' : '#F8FAFC' },
+                  },
+                }}
+              >
+                {/* Item content */}
+                <Box flex={1} minWidth={0}>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? 700 : 500,
+                        color: isSelected ? 'primary.main' : 'text.primary',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {opt.label}
+                    </Typography>
+                    {opt.sortOrder !== undefined && opt.sortOrder !== 0 && (
+                      <Box component="span" sx={{ fontSize: 10, fontWeight: 600, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#F1F5F9', color: '#64748B', flexShrink: 0 }}>
+                        #{opt.sortOrder}
+                      </Box>
+                    )}
+                  </Box>
+                  {type.toUpperCase() === 'CITY' && (opt.metadata?.cityCode || opt.metadata?.whatsappLink) && (
+                    <Typography sx={{ fontSize: 11, color: 'text.disabled', mt: 0.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {opt.metadata?.cityCode && `${opt.metadata.cityCode}`}
+                      {opt.metadata?.cityCode && opt.metadata?.whatsappLink && ' · '}
+                      {opt.metadata?.whatsappLink && 'WhatsApp linked'}
+                    </Typography>
                   )}
                 </Box>
-              }
-            >
-              <ListItemButton
-                selected={selectedId === opt._id}
-                onClick={() => !disabled && onSelect(opt)}
-              >
-                <ListItemText
-                  primary={
-                    <Box display="flex" alignItems="center" flexWrap="wrap" pr={8}>
-                      <Typography sx={{ fontWeight: selectedId === opt._id ? 600 : 400, mr: 1 }}>
-                        {opt.label}
-                      </Typography>
-                      {opt.sortOrder !== undefined && opt.sortOrder !== 0 && (
-                        <Chip size="small" label={`Order: ${opt.sortOrder}`} sx={{ height: 20, fontSize: '0.7rem' }} />
-                      )}
-                    </Box>
-                  }
-                  secondary={type.toUpperCase() === 'CITY'
-                    ? `${opt.metadata?.cityCode ? `Code: ${opt.metadata.cityCode}   ` : ''}${opt.metadata?.whatsappLink ? `Link: ${opt.metadata.whatsappLink}` : ''}`
-                    : undefined}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))
+
+                {/* Actions */}
+                <Box display="flex" alignItems="center" gap={0.25} flexShrink={0} ml={0.5}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleStartEdit(e, opt)}
+                    sx={{
+                      width: 24, height: 24, borderRadius: '6px', color: 'text.disabled', transition: T,
+                      '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: 'primary.main', bgcolor: '#EFF6FF' } },
+                      '&:active': { transform: 'scale(0.9)' },
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: 13 }} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleDelete(e, opt._id)}
+                    sx={{
+                      width: 24, height: 24, borderRadius: '6px', color: 'text.disabled', transition: T,
+                      '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } },
+                      '&:active': { transform: 'scale(0.9)' },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 13 }} />
+                  </IconButton>
+                  {isSelected && (
+                    <ChevronRightIcon sx={{ fontSize: 14, color: 'primary.main', ml: 0.25 }} />
+                  )}
+                </Box>
+              </Box>
+            );
+          })
         )}
-      </List>
+      </Box>
 
       <ConfirmDialog
         open={confirmDeleteOpen}
         onClose={() => { setConfirmDeleteOpen(false); setDeletionStep(1); }}
         onConfirm={performDeleteAction}
-        title={getDeleteTitle()}
-        message={getDeleteMessage()}
-        severity={deletionStep === 3 ? "error" : "warning"}
+        title={deletionStep === 1 ? 'Confirm Delete' : deletionStep === 2 ? 'Second Confirmation' : 'FINAL CONFIRMATION'}
+        message={
+          deletionStep === 1
+            ? `Delete this ${title.toLowerCase()}?`
+            : deletionStep === 2
+            ? 'Warning: this will also remove all child items. Continue?'
+            : 'FINAL WARNING: This data cannot be recovered. Confirm to proceed.'
+        }
+        severity={deletionStep === 3 ? 'error' : 'warning'}
         loading={deletingLoading}
-        confirmText={deletionStep === 3 ? "DELETE FOREVER" : "Confirm Step " + deletionStep}
+        confirmText={deletionStep === 3 ? 'DELETE FOREVER' : `Confirm (${deletionStep}/3)`}
       />
 
       <ConfirmDialog
@@ -370,7 +375,7 @@ const OptionColumn: React.FC<OptionColumnProps> = ({
         onClose={() => setConfirmSaveOpen(false)}
         onConfirm={handleSave}
         title="Confirm Update"
-        message="Are you sure you want to update this curriculum item? This may affect existing class records."
+        message="Updating this item may affect existing class records."
         severity="warning"
         loading={saving}
       />
@@ -378,123 +383,87 @@ const OptionColumn: React.FC<OptionColumnProps> = ({
   );
 };
 
-
+// ─── Main page ────────────────────────────────────────────────────────────────
 const OptionsManagementPage: React.FC = () => {
-  // State
-  const [currentType, setCurrentType] = useState<string>('CURRICULUM');
+  const [currentType, setCurrentType] = useState('CURRICULUM');
   const [knownTypes, setKnownTypes] = useState(OPTION_TYPES);
   const [isAddingType, setIsAddingType] = useState(false);
   const [newTypeInput, setNewTypeInput] = useState('');
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: '', severity: 'info' });
 
-  // --- Curriculum State ---
-  const [selectedBoardId, setSelectedBoardId] = useState<string>('');
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+  const [selectedBoardId, setSelectedBoardId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [selectedCityId, setSelectedCityId] = useState('');
+  const [selectedCityValue, setSelectedCityValue] = useState('');
 
-  // --- City Hierarchy State ---
-  const [selectedCityId, setSelectedCityId] = useState<string>('');
-  const [selectedCityValue, setSelectedCityValue] = useState<string>('');
-
-  // --- Flat List State (Legacy) --- 
-  // Re-using the same generic `useOptions` for flat lists (City etc)
-  // const [selectedFlatListId, setSelectedFlatListId] = useState<string>(''); // Not really used, flat lists are flat
-
-  // Legacy Data Hook for non-Curriculum/City tabs
   const { options: flatOptions, refetch: flatRefetch } = useOptions(
     (currentType === 'CURRICULUM' || currentType === 'CITY') ? '' : currentType
   );
 
-  // -- Flat List Editing State --
   const [editingOption, setEditingOption] = useState<OptionItem | null>(null);
   const [label, setLabel] = useState('');
-  const [value, setValue] = useState(''); // Code
-  const [sortOrder, setSortOrder] = useState<number>(0);
+  const [value, setValue] = useState('');
+  const [sortOrder, setSortOrder] = useState(0);
   const [savingFlat, setSavingFlat] = useState(false);
   const [confirmDeleteFlatOpen, setConfirmDeleteFlatOpen] = useState(false);
   const [deletingFlatId, setDeletingFlatId] = useState<string | null>(null);
   const [deletingFlatLoading, setDeletingFlatLoading] = useState(false);
 
-  // Load backend types
   useEffect(() => {
     (async () => {
       try {
         const remoteTypes = await getOptionTypes();
         setKnownTypes((prev) => {
           const existing = new Set(prev.map((t) => t.value));
-          // Filter out BOARD/GRADE/CLASS/SUBJECT/CHAPTER from the tabs list since they are now in Curriculum
-          const hiddenTypes = new Set(['BOARD', 'GRADE', 'CLASS', 'SUBJECT', 'CHAPTER']);
-
+          const hidden = new Set(['BOARD', 'GRADE', 'CLASS', 'SUBJECT', 'CHAPTER']);
           const merged = [...prev];
           remoteTypes
             .filter((t) => !String(t.value || '').toUpperCase().startsWith('AREA_'))
-            .forEach((t) => {
-              // Only add if not customized and not hidden
-              if (!existing.has(t.value) && !hiddenTypes.has(t.value)) {
-                merged.push(t);
-              }
-            });
+            .forEach((t) => { if (!existing.has(t.value) && !hidden.has(t.value)) merged.push(t); });
           return merged;
         });
       } catch { /* ignore */ }
     })();
   }, []);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
-    setCurrentType(newValue);
+  const handleTabChange = (val: string) => {
+    setCurrentType(val);
     resetFlatForm();
-    setSelectedCityId('');
-    setSelectedCityValue('');
+    setSelectedCityId(''); setSelectedCityValue('');
   };
 
-  const resetFlatForm = () => {
-    setEditingOption(null);
-    setLabel('');
-    setValue('');
-    setSortOrder(0);
-  };
+  const resetFlatForm = () => { setEditingOption(null); setLabel(''); setValue(''); setSortOrder(0); };
 
   const addType = () => {
     const trimmed = newTypeInput.trim();
     if (!trimmed) return;
     const upper = trimmed.toUpperCase().replace(/\s+/g, '_');
     if (upper.startsWith('AREA_')) {
-      setSnackbar({ open: true, message: 'AREA_* types are hidden. Please add areas under the Cities section.', severity: 'info' });
+      setSnackbar({ open: true, message: 'AREA_* types are managed under the Cities section.', severity: 'info' });
       return;
     }
-    if (!knownTypes.some(t => t.value === upper)) {
-      setKnownTypes(prev => [...prev, { value: upper, label: trimmed }]);
-    }
-    setCurrentType(upper);
-    setIsAddingType(false);
-    setNewTypeInput('');
+    if (!knownTypes.some((t) => t.value === upper))
+      setKnownTypes((prev) => [...prev, { value: upper, label: trimmed }]);
+    setCurrentType(upper); setIsAddingType(false); setNewTypeInput('');
   };
 
   const handleSaveFlat = async () => {
+    if (!label.trim()) return;
     try {
       setSavingFlat(true);
-      if (!label.trim()) return;
       const svc = await import('@/services/optionsService');
-      const payload: any = {
+      await svc.createOrUpdateOption(editingOption?._id, {
         type: currentType,
         label: label.trim(),
         value: value.trim() || label.trim().toUpperCase().replace(/\s+/g, '_'),
-        sortOrder
-      };
-      await svc.createOrUpdateOption(editingOption?._id, payload);
-      setSnackbar({ open: true, message: 'Saved successfully', severity: 'success' });
-      resetFlatForm();
-      flatRefetch();
+        sortOrder,
+      });
+      setSnackbar({ open: true, message: 'Saved', severity: 'success' });
+      resetFlatForm(); flatRefetch();
     } catch (err: any) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
-    } finally {
-      setSavingFlat(false);
-    }
-  };
-
-  const handleDeleteFlat = async (id: string) => {
-    setDeletingFlatId(id);
-    setConfirmDeleteFlatOpen(true);
+    } finally { setSavingFlat(false); }
   };
 
   const performDeleteFlat = async () => {
@@ -503,269 +472,299 @@ const OptionsManagementPage: React.FC = () => {
       setDeletingFlatLoading(true);
       const svc = await import('@/services/optionsService');
       await svc.deleteOption(deletingFlatId);
-      setConfirmDeleteFlatOpen(false);
-      setDeletingFlatId(null);
+      setConfirmDeleteFlatOpen(false); setDeletingFlatId(null);
       flatRefetch();
-      setSnackbar({ open: true, message: 'Deleted successfully', severity: 'success' });
+      setSnackbar({ open: true, message: 'Deleted', severity: 'success' });
     } catch (err: any) {
       setSnackbar({ open: true, message: err.message, severity: 'error' });
-    } finally {
-      setDeletingFlatLoading(false);
-    }
-  };
-
-  // --- Curriculum Actions ---
-  const handleBoardSelect = (item: OptionItem) => {
-    setSelectedBoardId(item._id);
-    setSelectedClassId('');
-    setSelectedSubjectId('');
-  };
-  const handleClassSelect = (item: OptionItem) => {
-    setSelectedClassId(item._id);
-    setSelectedSubjectId('');
-  };
-  const handleSubjectSelect = (item: OptionItem) => {
-    setSelectedSubjectId(item._id);
+    } finally { setDeletingFlatLoading(false); }
   };
 
   const showSnackbar = (msg: string, severity: 'success' | 'error' = 'success') =>
     setSnackbar({ open: true, message: msg, severity });
 
+  const isMiller = currentType === 'CURRICULUM' || currentType === 'CITY';
+
   return (
-    <Container maxWidth="xl" sx={{ pb: 5 }}>
-      {/* Hero Section */}
+    <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <Box
         sx={{
-          background: 'linear-gradient(135deg, #4A148C 0%, #311B92 100%)',
-          color: 'white',
-          pt: { xs: 4, md: 5 },
-          pb: 0,
-          px: { xs: 2, md: 4 },
-          borderRadius: { xs: 0, md: 3 },
-          mt: 3,
-          mb: 4,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-          position: 'relative',
-          overflow: 'hidden'
+          bgcolor: '#1C3556',
+          px: { xs: 2.5, md: 4 },
+          py: { xs: 2.5, md: 3 },
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
         }}
       >
-        <Box sx={{ position: 'relative', zIndex: 1, mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Box>
-            <Typography variant="h4" fontWeight={800} gutterBottom>
-              Options Management
-            </Typography>
-            <Typography variant="body1" sx={{ opacity: 0.9, maxWidth: 600 }}>
-              Use the Curriculum Hierarchy to manage Board structure, or other tabs for general lists.
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<CategoryIcon />}
-            onClick={() => setIsAddingType(true)}
-            sx={{
-              bgcolor: 'white',
-              color: 'primary.main',
-              fontWeight: 600,
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' }
-            }}
-          >
-            Add Type
-          </Button>
+        <Box>
+          <Typography sx={{ fontSize: { xs: 20, md: 24 }, fontWeight: 800, letterSpacing: -0.6, color: '#fff', lineHeight: 1.2 }}>
+            Options
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', mt: 0.4, fontWeight: 500 }}>
+            Manage curriculum hierarchy, cities, and dropdown lists
+          </Typography>
         </Box>
 
-        {/* Scrollable Tabs */}
-        <Box sx={{ position: 'relative', zIndex: 1 }}>
-          <Tabs
-            value={currentType}
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            sx={{
-              '& .MuiTab-root': {
-                color: 'rgba(255,255,255,0.7)',
-                fontWeight: 600,
-                textTransform: 'none',
-                fontSize: '1rem',
-                minWidth: 'auto',
-                px: 3,
-              },
-              '& .Mui-selected': { color: '#fff !important' },
-              '& .MuiTabs-indicator': { backgroundColor: '#fff', height: 4, borderRadius: '4px 4px 0 0' }
-            }}
-          >
-            {knownTypes.map((t) => (
-              <Tab key={t.value} label={t.label} value={t.value} />
-            ))}
-          </Tabs>
-        </Box>
-        <Box sx={{
-          position: 'absolute',
-          top: -30, right: -30,
-          width: 250, height: 250,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-        }} />
+        <Button
+          variant="outlined"
+          startIcon={<CategoryIcon sx={{ fontSize: '15px !important' }} />}
+          onClick={() => setIsAddingType(true)}
+          sx={{
+            fontSize: 13, fontWeight: 700, px: 2, py: 0.85, borderRadius: '10px',
+            color: 'rgba(255,255,255,0.8)', borderColor: 'rgba(255,255,255,0.25)',
+            transition: T,
+            '@media (hover: hover) and (pointer: fine)': {
+              '&:hover': { borderColor: 'rgba(255,255,255,0.6)', bgcolor: 'rgba(255,255,255,0.06)' },
+            },
+            '&:active': { transform: 'scale(0.97)' },
+          }}
+        >
+          Add Type
+        </Button>
       </Box>
 
-      {/* --- CONTENT AREA --- */}
+      {/* ── Content area ────────────────────────────────────────────────────── */}
+      <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 2.5 } }}>
 
-      {currentType === 'CURRICULUM' || currentType === 'CITY' ? (
-        // MILLER COLUMNS VIEW
-        <Box sx={{ overflowX: 'auto', pb: 2 }}>
-          <Grid container spacing={2} sx={{ minWidth: 1000, flexWrap: 'nowrap' }}>
-            {currentType === 'CURRICULUM' ? (
-              <>
-                {/* 1. BOARDS */}
-                <Grid item xs={3}>
-                  <OptionColumn
-                    title="Boards"
-                    type="BOARD"
-                    selectedId={selectedBoardId}
-                    onSelect={handleBoardSelect}
-                    onSaveError={(m) => showSnackbar(m, 'error')}
-                    onSaveSuccess={(m) => showSnackbar(m, 'success')}
-                  />
-                </Grid>
-                {/* 2. CLASSES */}
-                <Grid item xs={3}>
-                  <OptionColumn
-                    title="Classes"
-                    type="GRADE"
-                    parentId={selectedBoardId}
-                    selectedId={selectedClassId}
-                    disabled={!selectedBoardId}
-                    onSelect={handleClassSelect}
-                    onSaveError={(m) => showSnackbar(m, 'error')}
-                    onSaveSuccess={(m) => showSnackbar(m, 'success')}
-                  />
-                </Grid>
-                {/* 3. SUBJECTS */}
-                <Grid item xs={3}>
-                  <OptionColumn
-                    title="Subjects"
-                    type="SUBJECT"
-                    parentId={selectedClassId}
-                    selectedId={selectedSubjectId}
-                    disabled={!selectedClassId}
-                    onSelect={handleSubjectSelect}
-                    onSaveError={(m) => showSnackbar(m, 'error')}
-                    onSaveSuccess={(m) => showSnackbar(m, 'success')}
-                  />
-                </Grid>
-                {/* 4. CHAPTERS */}
-                <Grid item xs={3}>
-                  <OptionColumn
-                    title="Chapters"
-                    type="CHAPTER"
-                    parentId={selectedSubjectId}
-                    selectedId={undefined} // Leaf node
-                    disabled={!selectedSubjectId}
-                    onSelect={() => { }}
-                    onSaveError={(m) => showSnackbar(m, 'error')}
-                    onSaveSuccess={(m) => showSnackbar(m, 'success')}
-                  />
-                </Grid>
-              </>
-            ) : (
-              <>
-                {/* 1. CITIES */}
-                <Grid item xs={6}>
-                  <OptionColumn
-                    title="Cities"
-                    type="CITY"
-                    selectedId={selectedCityId}
-                    onSelect={(item) => {
-                      setSelectedCityId(item._id);
-                      setSelectedCityValue(item.value);
-                    }}
-                    onSaveError={(m) => showSnackbar(m, 'error')}
-                    onSaveSuccess={(m) => showSnackbar(m, 'success')}
-                  />
-                </Grid>
-                {/* 2. AREAS */}
-                <Grid item xs={6}>
-                  <OptionColumn
-                    title="Areas"
-                    type={selectedCityValue ? `AREA_${selectedCityValue}` : 'NONE'}
-                    parentId={selectedCityId}
-                    disabled={!selectedCityId}
-                    onSelect={() => { }}
-                    onSaveError={(m) => showSnackbar(m, 'error')}
-                    onSaveSuccess={(m) => showSnackbar(m, 'success')}
-                  />
-                </Grid>
-              </>
-            )}
-          </Grid>
+        {/* ── Type pill switcher ────────────────────────────────────────────── */}
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 2.5, alignItems: 'center' }}>
+          {knownTypes.map((tab) => {
+            const active = currentType === tab.value;
+            return (
+              <Box
+                key={tab.value}
+                component="button"
+                onClick={() => handleTabChange(tab.value)}
+                sx={{
+                  px: 1.75, py: 0.55, border: 'none', cursor: 'pointer', borderRadius: '8px',
+                  fontSize: 12, fontWeight: 700, transition: T,
+                  bgcolor: active ? '#1C3556' : '#F1F5F9',
+                  color: active ? '#fff' : '#64748B',
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': { bgcolor: active ? '#1C3556' : '#E2E8F0' },
+                  },
+                  '&:active': { transform: 'scale(0.97)' },
+                }}
+              >
+                {tab.label}
+              </Box>
+            );
+          })}
         </Box>
-      ) : (
-        // FLAT LIST VIEW (Legacy for Categories, Modes, etc)
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>{editingOption ? 'Edit' : 'Add New'}</Typography>
-              <Stack spacing={2}>
-                <TextField label="Label" value={label} onChange={e => setLabel(e.target.value)} fullWidth />
-                <TextField label="Code" value={value} onChange={e => setValue(e.target.value)} fullWidth />
-                <TextField label="Sort Order" type="number" value={sortOrder} onChange={e => setSortOrder(Number(e.target.value))} fullWidth />
-                <Stack direction="row" spacing={1}>
-                  {editingOption && <Button onClick={resetFlatForm} fullWidth>Cancel</Button>}
-                  <Button variant="contained" onClick={handleSaveFlat} disabled={savingFlat} fullWidth>Save</Button>
-                </Stack>
-              </Stack>
-            </Paper>
-          </Grid>
-          <Grid item xs={12} md={8}>
-            <Paper>
-              <List>
-                {flatOptions.map(o => (
-                  <ListItem key={o._id} divider>
-                    <ListItemText 
-                      primary={
-                        <Box display="flex" alignItems="center" flexWrap="wrap" pr={8}>
-                          <Typography sx={{ mr: 1 }}>{o.label}</Typography>
-                          {o.sortOrder !== undefined && o.sortOrder !== 0 && (
-                            <Chip size="small" label={`Order: ${o.sortOrder}`} sx={{ height: 20, fontSize: '0.7rem' }} />
-                          )}
-                        </Box>
-                      } 
-                      secondary={o.value} 
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton onClick={() => {
-                        setEditingOption(o);
-                        setLabel(o.label);
-                        setValue(o.value);
-                        setSortOrder(o.sortOrder ?? 0);
-                      }}><EditIcon /></IconButton>
-                      <IconButton onClick={() => handleDeleteFlat(o._id)}><DeleteIcon /></IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            </Paper>
-          </Grid>
-        </Grid>
-      )}
 
-      {/* Add Type Dialog */}
-      <Dialog open={isAddingType} onClose={() => setIsAddingType(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add New Option Type</DialogTitle>
-        <DialogContent>
+        {/* ── Miller columns ────────────────────────────────────────────────── */}
+        {isMiller ? (
+          <Box sx={{ overflowX: 'auto', pb: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: currentType === 'CURRICULUM' ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
+                gap: 2,
+                minWidth: currentType === 'CURRICULUM' ? 900 : 560,
+              }}
+            >
+              {currentType === 'CURRICULUM' ? (
+                <>
+                  <OptionColumn title="Boards" type="BOARD" selectedId={selectedBoardId}
+                    onSelect={(item) => { setSelectedBoardId(item._id); setSelectedClassId(''); setSelectedSubjectId(''); }}
+                    onSaveError={(m) => showSnackbar(m, 'error')} onSaveSuccess={(m) => showSnackbar(m)} />
+                  <OptionColumn title="Classes" type="GRADE" parentId={selectedBoardId}
+                    selectedId={selectedClassId} disabled={!selectedBoardId}
+                    onSelect={(item) => { setSelectedClassId(item._id); setSelectedSubjectId(''); }}
+                    onSaveError={(m) => showSnackbar(m, 'error')} onSaveSuccess={(m) => showSnackbar(m)} />
+                  <OptionColumn title="Subjects" type="SUBJECT" parentId={selectedClassId}
+                    selectedId={selectedSubjectId} disabled={!selectedClassId}
+                    onSelect={(item) => setSelectedSubjectId(item._id)}
+                    onSaveError={(m) => showSnackbar(m, 'error')} onSaveSuccess={(m) => showSnackbar(m)} />
+                  <OptionColumn title="Chapters" type="CHAPTER" parentId={selectedSubjectId}
+                    disabled={!selectedSubjectId} onSelect={() => {}}
+                    onSaveError={(m) => showSnackbar(m, 'error')} onSaveSuccess={(m) => showSnackbar(m)} />
+                </>
+              ) : (
+                <>
+                  <OptionColumn title="Cities" type="CITY" selectedId={selectedCityId}
+                    onSelect={(item) => { setSelectedCityId(item._id); setSelectedCityValue(item.value); }}
+                    onSaveError={(m) => showSnackbar(m, 'error')} onSaveSuccess={(m) => showSnackbar(m)} />
+                  <OptionColumn title="Areas" type={selectedCityValue ? `AREA_${selectedCityValue}` : 'NONE'}
+                    parentId={selectedCityId} disabled={!selectedCityId} onSelect={() => {}}
+                    onSaveError={(m) => showSnackbar(m, 'error')} onSaveSuccess={(m) => showSnackbar(m)} />
+                </>
+              )}
+            </Box>
+          </Box>
+        ) : (
+          /* ── Flat list editor ──────────────────────────────────────────────── */
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '320px 1fr' }, gap: 2.5, alignItems: 'start' }}>
+
+            {/* Form panel */}
+            <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+              <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                  {editingOption ? 'Edit Item' : 'Add Item'}
+                </Typography>
+              </Box>
+              <Box sx={{ px: 2.5, py: 2.5 }}>
+                <Stack spacing={1.75}>
+                  <TextField
+                    size="small" label="Label" fullWidth value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' }, '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 } } }}
+                  />
+                  <TextField
+                    size="small" label="Code" fullWidth value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    helperText="Auto-generated from label if blank"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                  />
+                  <TextField
+                    size="small" label="Sort Order" type="number" fullWidth value={sortOrder}
+                    onChange={(e) => setSortOrder(Number(e.target.value))}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                  />
+                  <Box display="flex" gap={1}>
+                    {editingOption && (
+                      <Button
+                        fullWidth onClick={resetFlatForm}
+                        sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', color: 'text.secondary', transition: T }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                    <Button
+                      fullWidth variant="contained" onClick={handleSaveFlat}
+                      disabled={savingFlat || !label.trim()}
+                      sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', boxShadow: 'none', transition: T, '&:active': { transform: 'scale(0.97)' } }}
+                    >
+                      {savingFlat ? <CircularProgress size={14} color="inherit" /> : (editingOption ? 'Update' : 'Add')}
+                    </Button>
+                  </Box>
+                </Stack>
+              </Box>
+            </Paper>
+
+            {/* List panel */}
+            <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+              <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                  {flatOptions.length} item{flatOptions.length !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+
+              {flatOptions.length === 0 ? (
+                <Box px={3} py={5} textAlign="center">
+                  <Typography color="text.disabled" fontSize={14}>No items yet</Typography>
+                </Box>
+              ) : (
+                flatOptions.map((o, i) => (
+                  <Box
+                    key={o._id}
+                    sx={{
+                      display: 'flex', alignItems: 'center', px: 2.5, py: 1.25,
+                      borderBottom: i < flatOptions.length - 1 ? '1px solid #F8FAFC' : 'none',
+                      bgcolor: editingOption?._id === o._id ? '#EFF6FF' : 'transparent',
+                      transition: T,
+                      '@media (hover: hover) and (pointer: fine)': {
+                        '&:hover': { bgcolor: editingOption?._id === o._id ? '#DBEAFE' : '#F8FAFC' },
+                      },
+                    }}
+                  >
+                    <Box flex={1} minWidth={0}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 600, color: editingOption?._id === o._id ? 'primary.main' : 'text.primary' }}>
+                          {o.label}
+                        </Typography>
+                        {o.sortOrder !== undefined && o.sortOrder !== 0 && (
+                          <Box component="span" sx={{ fontSize: 10, fontWeight: 600, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#F1F5F9', color: '#64748B' }}>
+                            #{o.sortOrder}
+                          </Box>
+                        )}
+                      </Box>
+                      <Typography sx={{ fontSize: 11, color: 'text.disabled', fontFamily: 'monospace' }}>{o.value}</Typography>
+                    </Box>
+
+                    <Box display="flex" gap={0.5} flexShrink={0}>
+                      <IconButton
+                        size="small"
+                        onClick={() => { setEditingOption(o); setLabel(o.label); setValue(o.value); setSortOrder(o.sortOrder ?? 0); }}
+                        sx={{
+                          borderRadius: '7px', color: 'text.disabled', transition: T,
+                          '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: 'primary.main', bgcolor: '#EFF6FF' } },
+                          '&:active': { transform: 'scale(0.9)' },
+                        }}
+                      >
+                        <EditIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => { setDeletingFlatId(o._id); setConfirmDeleteFlatOpen(true); }}
+                        sx={{
+                          borderRadius: '7px', color: 'text.disabled', transition: T,
+                          '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } },
+                          '&:active': { transform: 'scale(0.9)' },
+                        }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                ))
+              )}
+            </Paper>
+          </Box>
+        )}
+      </Box>
+
+      {/* ── Add Type Dialog ──────────────────────────────────────────────────── */}
+      <Dialog
+        open={isAddingType}
+        onClose={() => { setIsAddingType(false); setNewTypeInput(''); }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '14px', border: '1px solid #E2E8F0' } }}
+      >
+        <DialogTitle sx={{ px: 3, pt: 2.5, pb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography fontWeight={800} fontSize={16} letterSpacing={-0.3}>Add Option Type</Typography>
+          <IconButton size="small" onClick={() => setIsAddingType(false)} sx={{ borderRadius: '8px', color: 'text.secondary' }}>
+            <CloseIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ px: 3, pb: 0 }}>
           <TextField
-            autoFocus
-            label="Type Key"
-            fullWidth
+            autoFocus fullWidth size="small"
+            placeholder="e.g. LANGUAGES"
             value={newTypeInput}
             onChange={(e) => setNewTypeInput(e.target.value)}
-            placeholder="e.g. LANGUAGES"
-            sx={{ mt: 1 }}
+            onKeyDown={(e) => { if (e.key === 'Enter') addType(); }}
+            helperText="Will be converted to UPPER_SNAKE_CASE"
+            sx={{
+              mt: 0.5,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '9px', fontSize: 13,
+                '& fieldset': { borderColor: '#E2E8F0' },
+                '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 },
+              },
+            }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsAddingType(false)}>Cancel</Button>
-          <Button variant="contained" onClick={addType} disabled={!newTypeInput.trim()}>Add & Switch</Button>
+        <DialogActions sx={{ px: 3, py: 2.5 }}>
+          <Button
+            onClick={() => { setIsAddingType(false); setNewTypeInput(''); }}
+            sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', color: 'text.secondary', transition: T }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained" onClick={addType} disabled={!newTypeInput.trim()}
+            sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', boxShadow: 'none', px: 2.5, transition: T, '&:active': { transform: 'scale(0.97)' } }}
+          >
+            Add & Switch
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -781,13 +780,12 @@ const OptionsManagementPage: React.FC = () => {
         onClose={() => setConfirmDeleteFlatOpen(false)}
         onConfirm={performDeleteFlat}
         title="Delete Option"
-        message="Are you sure you want to delete this option? This action cannot be undone."
+        message="Delete this option? This cannot be undone."
         severity="error"
         loading={deletingFlatLoading}
       />
-    </Container>
+    </Box>
   );
 };
 
 export default OptionsManagementPage;
-

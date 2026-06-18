@@ -4,10 +4,11 @@ import {
   Container, Box, Typography, Tabs, Tab, Dialog, DialogContent, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, Button, TablePagination,
   TextField, TableSortLabel, MenuItem, Select, InputAdornment, IconButton,
-  Link as MuiLink, Avatar, Card, CardContent, Stack, useMediaQuery, Autocomplete, Chip,
+  Link as MuiLink, Avatar, Card, CardContent, Stack, useMediaQuery, Autocomplete, Chip, Collapse,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import ClearIcon from '@mui/icons-material/Clear';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
@@ -133,6 +134,7 @@ export default function TutorVerificationPage() {
   const [citiesList, setCitiesList] = useState<string[]>([]);
   const [areasList, setAreasList] = useState<string[]>([]);
   const [kpis, setKpis] = useState({ total: 0, verified: 0, underReview: 0, rejected: 0 });
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const { options: subjectOptions } = useOptions('SUBJECT');
 
@@ -578,6 +580,90 @@ export default function TutorVerificationPage() {
           <Tab label="All Tutors" />
         </Tabs>
       </Box>
+
+      {/* ── Mobile filter bar ── */}
+      {isMobile && (
+        <Box sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Button
+              size="small"
+              startIcon={<FilterListIcon />}
+              onClick={() => setShowMobileFilters(p => !p)}
+              variant={showMobileFilters ? 'contained' : 'outlined'}
+              sx={{ borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem', textTransform: 'none' }}
+            >
+              Filters
+            </Button>
+            {Object.values(filters).some(Boolean) && (
+              <Chip
+                label="Clear all"
+                size="small"
+                onDelete={() => setFilters({
+                  teacherId: '', name: '', email: '', phone: '', preferredMode: '',
+                  status: '', verifier: '', subjects: '', city: '', area: '', grade: '', board: '',
+                })}
+                sx={{ fontWeight: 600, fontSize: '0.72rem' }}
+              />
+            )}
+          </Box>
+          <Collapse in={showMobileFilters}>
+            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <TextField
+                size="small" label="Name" value={filters.name}
+                onChange={e => handleFilterChange('name', e.target.value)}
+                InputProps={{ endAdornment: filters.name && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => clearFilter('name')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                  </InputAdornment>
+                )}}
+              />
+              <TextField
+                size="small" label="Phone" value={filters.phone}
+                onChange={e => handleFilterChange('phone', e.target.value)}
+                InputProps={{ endAdornment: filters.phone && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => clearFilter('phone')}><ClearIcon sx={{ fontSize: '0.8rem' }} /></IconButton>
+                  </InputAdornment>
+                )}}
+              />
+              <Autocomplete
+                freeSolo size="small" options={cityOptions.map(o => o.label)} value={filters.city}
+                onChange={(_e, v) => handleFilterChange('city', v || '')}
+                onInputChange={(_e, v) => handleFilterChange('city', v)}
+                renderInput={params => <TextField {...params} label="City" />}
+              />
+              <Autocomplete
+                freeSolo size="small" options={areaOptions.map(o => o.label)} value={filters.area}
+                onChange={(_e, v) => handleFilterChange('area', v || '')}
+                onInputChange={(_e, v) => handleFilterChange('area', v)}
+                disabled={!filters.city}
+                renderInput={params => <TextField {...params} label="Area" />}
+              />
+              <Select
+                size="small" value={filters.preferredMode} displayEmpty
+                onChange={e => handleFilterChange('preferredMode', e.target.value as string)}
+                sx={{ fontSize: '0.875rem' }}
+              >
+                <MenuItem value=""><em>Mode</em></MenuItem>
+                <MenuItem value="ONLINE">Online</MenuItem>
+                <MenuItem value="OFFLINE">Offline</MenuItem>
+                <MenuItem value="BOTH">Both</MenuItem>
+              </Select>
+              <Select
+                size="small" value={filters.status} displayEmpty
+                onChange={e => handleFilterChange('status', e.target.value as string)}
+                sx={{ fontSize: '0.875rem' }}
+              >
+                <MenuItem value=""><em>Status</em></MenuItem>
+                <MenuItem value="PENDING">Pending</MenuItem>
+                <MenuItem value="UNDER_REVIEW">Review</MenuItem>
+                <MenuItem value="VERIFIED">Verified</MenuItem>
+                <MenuItem value="REJECTED">Rejected</MenuItem>
+              </Select>
+            </Paper>
+          </Collapse>
+        </Box>
+      )}
 
       {/* ── Mobile card list ── */}
       {isMobile && (
