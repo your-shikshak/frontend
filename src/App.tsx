@@ -95,8 +95,8 @@ import StudentTestDetailPage from "./pages/student/StudentTestDetailPage";
 import OptionsManagementPage from "./pages/admin/OptionsManagementPage";
 import AdminStudentProfilePage from "./pages/admin/AdminStudentProfilePage";
 import ApprovalsManagementPage from "./pages/admin/ApprovalsManagementPage";
-import AdminBannerNotificationsPage from "./pages/admin/BannerNotificationsPage";
-import CoordinatorBannerNotificationsPage from "./pages/coordinator/BannerNotificationsPage";
+import AdminNotificationsPage from "./pages/admin/NotificationsPage";
+import CoordinatorNotificationsPage from "./pages/coordinator/NotificationsPage";
 import { useAuth } from "./hooks/useAuth";
 
 const App: React.FC = () => {
@@ -418,17 +418,15 @@ const App: React.FC = () => {
               />
               <Route
                 path="announcements"
-                element={
-                  <ProtectedRoute
-                    allowedRoles={[USER_ROLES.COORDINATOR, USER_ROLES.ADMIN]}
-                  >
-                    <SendAnnouncementPage />
-                  </ProtectedRoute>
-                }
+                element={<Navigate to="/notifications" replace />}
               />
               <Route
-                path="announcement"
-                element={<Navigate to="/announcements" replace />}
+                path="notifications"
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.COORDINATOR]}>
+                    <CoordinatorNotificationsPage />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="test-reports"
@@ -590,16 +588,9 @@ const App: React.FC = () => {
                 <Route path="approvals" element={<ApprovalsManagementPage />} />
                 <Route path="analytics" element={<AdvancedAnalyticsPage />} />
                 <Route path="verify-manager/:id" element={<ManagerVerificationPage />} />
-                <Route path="banner-notifications" element={<AdminBannerNotificationsPage />} />
+                <Route path="notifications" element={<AdminNotificationsPage />} />
+                <Route path="banner-notifications" element={<Navigate to="/admin/notifications" replace />} />
               </Route>
-              <Route
-                path="banner-notifications"
-                element={
-                  <ProtectedRoute allowedRoles={[USER_ROLES.COORDINATOR]}>
-                    <CoordinatorBannerNotificationsPage />
-                  </ProtectedRoute>
-                }
-              />
               <Route
                 path="class-requests"
                 element={

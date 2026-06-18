@@ -87,6 +87,15 @@ export const getMyExpressedInterests = async (): Promise<{ data: any[]; success:
   return data;
 };
 
+export const sendAdminBroadcast = async (payload: {
+  subject: string;
+  message: string;
+  recipientGroup: 'ALL_MANAGERS' | 'ALL_COORDINATORS' | 'ALL_TEACHERS';
+}): Promise<{ data: { recipientCount: number; recipientGroup: string } }> => {
+  const { data } = await api.post('/api/announcements/admin/broadcast', payload);
+  return data;
+};
+
 export const sendCoordinatorAnnouncement = async (
   payload: ISendAnnouncementFormData
 ): Promise<ApiResponse<ICoordinatorAnnouncement>> => {

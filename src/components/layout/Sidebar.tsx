@@ -32,7 +32,6 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import PersonIcon from '@mui/icons-material/Person';
 import RecentActorsIcon from '@mui/icons-material/RecentActors';
 import CastForEducationIcon from '@mui/icons-material/CastForEducation';
-import ImageIcon from '@mui/icons-material/Image';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../../store/slices/authSlice';
 
@@ -112,8 +111,8 @@ const iconForLabel = (label: string) => {
       return <AccountBalanceWalletIcon />;
     case 'Notes':
       return <FolderIcon />;
-    case 'Banner Notifications':
-      return <ImageIcon />;
+    case 'Notifications':
+      return <CampaignIcon />;
     default:
       return <DashboardIcon />;
   }
