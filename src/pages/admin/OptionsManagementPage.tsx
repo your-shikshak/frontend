@@ -27,6 +27,7 @@ import { useOptions } from '@/hooks/useOptions';
 import SnackbarNotification from '@/components/common/SnackbarNotification';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import OndemandVideoIcon from '@mui/icons-material/OndemandVideo';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import SaveIcon from '@mui/icons-material/Save';
 import { TextField as MuiTextField, CircularProgress as MuiCircularProgress } from '@mui/material';
 
@@ -35,6 +36,7 @@ const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
 const T = `all 150ms ${EASE}`;
 
 const TUTORIAL_TYPE = 'TEACHER_TUTORIAL';
+const FAQ_TYPE = 'FAQ';
 
 const extractYouTubeId = (url: string): string | null => {
   const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
@@ -440,6 +442,7 @@ const OptionsManagementPage: React.FC = () => {
   const handleTabChange = (val: string) => {
     setCurrentType(val);
     resetFlatForm();
+    resetFaqForm();
     setSelectedCityId(''); setSelectedCityValue('');
   };
 
@@ -494,6 +497,7 @@ const OptionsManagementPage: React.FC = () => {
     setSnackbar({ open: true, message: msg, severity });
 
   const isTutorial = currentType === TUTORIAL_TYPE;
+  const isFaq = currentType === FAQ_TYPE;
   const isMiller = currentType === 'CURRICULUM' || currentType === 'CITY';
 
   // Teacher Tutorial Video
@@ -526,6 +530,48 @@ const OptionsManagementPage: React.FC = () => {
       showSnackbar('Failed to save tutorial video', 'error');
     } finally {
       setTutorialSaving(false);
+    }
+  };
+
+  // FAQ — each FAQ is an Option of type FAQ (label = question, metadata.answer = answer).
+  // Reuses flatOptions / flatRefetch (useOptions(currentType)) for the list.
+  const [faqEditingId, setFaqEditingId] = useState<string | null>(null);
+  const [faqQuestion, setFaqQuestion] = useState('');
+  const [faqAnswer, setFaqAnswer] = useState('');
+  const [faqSort, setFaqSort] = useState<number | string>('');
+  const [faqSaving, setFaqSaving] = useState(false);
+
+  const resetFaqForm = () => {
+    setFaqEditingId(null); setFaqQuestion(''); setFaqAnswer(''); setFaqSort('');
+  };
+
+  const startEditFaq = (o: OptionItem) => {
+    setFaqEditingId(o._id);
+    setFaqQuestion(o.label);
+    setFaqAnswer(o.metadata?.answer ?? '');
+    setFaqSort(o.sortOrder ?? '');
+  };
+
+  const saveFaq = async () => {
+    const q = faqQuestion.trim();
+    const a = faqAnswer.trim();
+    if (!q || !a) return;
+    setFaqSaving(true);
+    try {
+      await createOrUpdateOption(faqEditingId || undefined, {
+        type: FAQ_TYPE,
+        label: q,
+        value: q.toUpperCase().replace(/\s+/g, '_').slice(0, 60),
+        sortOrder: faqSort === '' ? 0 : Number(faqSort),
+        metadata: { answer: a },
+      });
+      showSnackbar(faqEditingId ? 'FAQ updated' : 'FAQ added');
+      resetFaqForm();
+      flatRefetch();
+    } catch (err: any) {
+      showSnackbar(err?.message || 'Failed to save FAQ', 'error');
+    } finally {
+      setFaqSaving(false);
     }
   };
 
@@ -628,6 +674,31 @@ const OptionsManagementPage: React.FC = () => {
               </Box>
             );
           })()}
+
+          {/* FAQ — managed as a list of FAQ-type options */}
+          {(() => {
+            const active = currentType === FAQ_TYPE;
+            return (
+              <Box
+                component="button"
+                onClick={() => handleTabChange(FAQ_TYPE)}
+                sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.6,
+                  px: 1.5, py: 0.55, border: 'none', cursor: 'pointer', borderRadius: '8px',
+                  fontSize: 12, fontWeight: 700, transition: T,
+                  bgcolor: active ? '#1C3556' : '#F1F5F9',
+                  color: active ? '#fff' : '#64748B',
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': { bgcolor: active ? '#1C3556' : '#E2E8F0' },
+                  },
+                  '&:active': { transform: 'scale(0.97)' },
+                }}
+              >
+                <HelpOutlineIcon sx={{ fontSize: 15 }} />
+                FAQ
+              </Box>
+            );
+          })()}
         </Box>
 
         {/* ── Teacher Tutorial editor (form + live preview) ─────────────────── */}
@@ -716,6 +787,132 @@ const OptionsManagementPage: React.FC = () => {
               </Box>
             );
           })()
+        ) : isFaq ? (
+          /* ── FAQ editor (form + list) ──────────────────────────────────────── */
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '360px 1fr' }, gap: 2.5, alignItems: 'start' }}>
+
+            {/* Form panel */}
+            <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+              <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                  {faqEditingId ? 'Edit FAQ' : 'Add FAQ'}
+                </Typography>
+              </Box>
+              <Box sx={{ px: 2.5, py: 2.5 }}>
+                <Stack spacing={1.75}>
+                  <MuiTextField
+                    size="small" label="Question" fullWidth value={faqQuestion}
+                    onChange={(e) => setFaqQuestion(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' }, '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 } } }}
+                  />
+                  <MuiTextField
+                    size="small" label="Answer" fullWidth multiline rows={5} value={faqAnswer}
+                    onChange={(e) => setFaqAnswer(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                  />
+                  <MuiTextField
+                    size="small" label="Sort Order" type="number" fullWidth value={faqSort}
+                    onChange={(e) => setFaqSort(e.target.value)}
+                    helperText="Lower numbers appear first"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                  />
+                  <Box display="flex" gap={1} justifyContent="flex-end">
+                    {faqEditingId && (
+                      <Button
+                        onClick={resetFaqForm}
+                        sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', color: 'text.secondary', transition: T }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                    <Button
+                      variant="contained" onClick={saveFaq}
+                      disabled={faqSaving || !faqQuestion.trim() || !faqAnswer.trim()}
+                      startIcon={faqSaving ? <MuiCircularProgress size={14} color="inherit" /> : <SaveIcon />}
+                      sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', px: 2.25, boxShadow: 'none', bgcolor: '#1C3556', '&:hover': { bgcolor: '#152943' }, transition: T, '&:active': { transform: 'scale(0.97)' } }}
+                    >
+                      {faqSaving ? 'Saving…' : (faqEditingId ? 'Update FAQ' : 'Add FAQ')}
+                    </Button>
+                  </Box>
+                </Stack>
+              </Box>
+            </Paper>
+
+            {/* List panel */}
+            <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+              <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                  {flatOptions.length} question{flatOptions.length !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+
+              {flatOptions.length === 0 ? (
+                <Box px={3} py={5} textAlign="center">
+                  <HelpOutlineIcon sx={{ fontSize: 30, color: '#CBD5E1', mb: 1 }} />
+                  <Typography color="text.disabled" fontSize={14}>No FAQs yet — add your first question</Typography>
+                </Box>
+              ) : (
+                [...flatOptions]
+                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                  .map((o, i, arr) => (
+                    <Box
+                      key={o._id}
+                      sx={{
+                        px: 2.5, py: 1.75,
+                        borderBottom: i < arr.length - 1 ? '1px solid #F8FAFC' : 'none',
+                        bgcolor: faqEditingId === o._id ? '#EFF6FF' : 'transparent',
+                        transition: T,
+                        '@media (hover: hover) and (pointer: fine)': {
+                          '&:hover': { bgcolor: faqEditingId === o._id ? '#DBEAFE' : '#F8FAFC' },
+                        },
+                      }}
+                    >
+                      <Box display="flex" alignItems="flex-start" gap={1}>
+                        <Box flex={1} minWidth={0}>
+                          <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                            {o.sortOrder !== undefined && o.sortOrder !== 0 && (
+                              <Box component="span" sx={{ fontSize: 10, fontWeight: 600, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#F1F5F9', color: '#64748B', flexShrink: 0 }}>
+                                #{o.sortOrder}
+                              </Box>
+                            )}
+                            <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: faqEditingId === o._id ? 'primary.main' : 'text.primary', letterSpacing: -0.2 }}>
+                              {o.label}
+                            </Typography>
+                          </Box>
+                          <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55 }}>
+                            {o.metadata?.answer || <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No answer set</Box>}
+                          </Typography>
+                        </Box>
+                        <Box display="flex" gap={0.5} flexShrink={0}>
+                          <IconButton
+                            size="small"
+                            onClick={() => startEditFaq(o)}
+                            sx={{
+                              borderRadius: '7px', color: 'text.disabled', transition: T,
+                              '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: 'primary.main', bgcolor: '#EFF6FF' } },
+                              '&:active': { transform: 'scale(0.9)' },
+                            }}
+                          >
+                            <EditIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => { setDeletingFlatId(o._id); setConfirmDeleteFlatOpen(true); }}
+                            sx={{
+                              borderRadius: '7px', color: 'text.disabled', transition: T,
+                              '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } },
+                              '&:active': { transform: 'scale(0.9)' },
+                            }}
+                          >
+                            <DeleteIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    </Box>
+                  ))
+              )}
+            </Paper>
+          </Box>
         ) : isMiller ? (
           <Box sx={{ overflowX: 'auto', pb: 2 }}>
             <Box
