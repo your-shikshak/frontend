@@ -43,6 +43,7 @@ import TutorPerformancePage from "./pages/coordinator/TutorPerformancePage";
 import PaymentTrackingPage from "./pages/coordinator/PaymentTrackingPage";
 import CoordinatorProfilePage from "./pages/coordinator/CoordinatorProfilePage";
 import ShiftRequestsPage from "./pages/coordinator/ShiftRequestsPage";
+import ClassRequestsPage from "./pages/manager/ClassRequestsPage";
 import CoordinatorAttendanceSheetTablePage from "./pages/coordinator/CoordinatorAttendanceSheetTablePage";
 import CoordinatorsPage from "./pages/manager/CoordinatorsPage";
 import ManagerTodayTasksPage from "./pages/manager/ManagerTodayTasksPage";
@@ -94,6 +95,8 @@ import StudentTestDetailPage from "./pages/student/StudentTestDetailPage";
 import OptionsManagementPage from "./pages/admin/OptionsManagementPage";
 import AdminStudentProfilePage from "./pages/admin/AdminStudentProfilePage";
 import ApprovalsManagementPage from "./pages/admin/ApprovalsManagementPage";
+import AdminBannerNotificationsPage from "./pages/admin/BannerNotificationsPage";
+import CoordinatorBannerNotificationsPage from "./pages/coordinator/BannerNotificationsPage";
 import { useAuth } from "./hooks/useAuth";
 
 const App: React.FC = () => {
@@ -587,7 +590,24 @@ const App: React.FC = () => {
                 <Route path="approvals" element={<ApprovalsManagementPage />} />
                 <Route path="analytics" element={<AdvancedAnalyticsPage />} />
                 <Route path="verify-manager/:id" element={<ManagerVerificationPage />} />
+                <Route path="banner-notifications" element={<AdminBannerNotificationsPage />} />
               </Route>
+              <Route
+                path="banner-notifications"
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.COORDINATOR]}>
+                    <CoordinatorBannerNotificationsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="class-requests"
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.MANAGER, USER_ROLES.ADMIN]}>
+                    <ClassRequestsPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="class-leads"
                 element={
