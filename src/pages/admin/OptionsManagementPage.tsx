@@ -28,11 +28,18 @@ import SnackbarNotification from '@/components/common/SnackbarNotification';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import OndemandVideoIcon from '@mui/icons-material/OndemandVideo';
 import SaveIcon from '@mui/icons-material/Save';
-import { Grid, TextField as MuiTextField, Card, CardContent, CircularProgress as MuiCircularProgress } from '@mui/material';
+import { TextField as MuiTextField, CircularProgress as MuiCircularProgress } from '@mui/material';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
 const T = `all 150ms ${EASE}`;
+
+const TUTORIAL_TYPE = 'TEACHER_TUTORIAL';
+
+const extractYouTubeId = (url: string): string | null => {
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+};
 
 const OPTION_TYPES = [
   { value: 'CURRICULUM', label: 'Curriculum' },
@@ -486,6 +493,7 @@ const OptionsManagementPage: React.FC = () => {
   const showSnackbar = (msg: string, severity: 'success' | 'error' = 'success') =>
     setSnackbar({ open: true, message: msg, severity });
 
+  const isTutorial = currentType === TUTORIAL_TYPE;
   const isMiller = currentType === 'CURRICULUM' || currentType === 'CITY';
 
   // Teacher Tutorial Video
@@ -568,49 +576,6 @@ const OptionsManagementPage: React.FC = () => {
       {/* ── Content area ────────────────────────────────────────────────────── */}
       <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 2.5 } }}>
 
-        {/* ── Teacher Tutorial Video ──────────────────────────────────────────── */}
-        <Card elevation={0} sx={{ mb: 3, border: '1px solid #E2E8F0', borderRadius: '12px' }}>
-          <CardContent>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <OndemandVideoIcon sx={{ color: '#1C3556' }} />
-              <Typography sx={{ fontSize: 15, fontWeight: 800, color: '#1C3556', letterSpacing: -0.3 }}>
-                Teacher Tutorial Video
-              </Typography>
-            </Box>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <MuiTextField
-                  fullWidth size="small" label="YouTube Video URL"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  value={tutorialVideoUrl}
-                  onChange={(e) => setTutorialVideoUrl(e.target.value)}
-                  helperText="Paste a YouTube link. Tutors see this in the Get Started screen."
-                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <MuiTextField
-                  fullWidth size="small" label="Description"
-                  placeholder="Brief description shown below the video…"
-                  value={tutorialDescription}
-                  onChange={(e) => setTutorialDescription(e.target.value)}
-                  multiline rows={2}
-                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  variant="contained" startIcon={tutorialSaving ? <MuiCircularProgress size={14} color="inherit" /> : <SaveIcon />}
-                  onClick={saveTutorial} disabled={tutorialSaving}
-                  sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', boxShadow: 'none', bgcolor: '#1C3556', '&:hover': { bgcolor: '#152943' }, transition: T, '&:active': { transform: 'scale(0.97)' } }}
-                >
-                  {tutorialSaving ? 'Saving…' : 'Save Tutorial'}
-                </Button>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
         {/* ── Type pill switcher ────────────────────────────────────────────── */}
         <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 2.5, alignItems: 'center' }}>
           {knownTypes.map((tab) => {
@@ -635,10 +600,123 @@ const OptionsManagementPage: React.FC = () => {
               </Box>
             );
           })}
+
+          {/* Divider — separates content-type tabs from the app-content tab */}
+          <Box sx={{ width: '1px', height: 20, bgcolor: '#E2E8F0', mx: 0.5, flexShrink: 0 }} />
+
+          {/* Teacher Tutorial lives as its own tab, not a floating card */}
+          {(() => {
+            const active = currentType === TUTORIAL_TYPE;
+            return (
+              <Box
+                component="button"
+                onClick={() => handleTabChange(TUTORIAL_TYPE)}
+                sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.6,
+                  px: 1.5, py: 0.55, border: 'none', cursor: 'pointer', borderRadius: '8px',
+                  fontSize: 12, fontWeight: 700, transition: T,
+                  bgcolor: active ? '#1C3556' : '#F1F5F9',
+                  color: active ? '#fff' : '#64748B',
+                  '@media (hover: hover) and (pointer: fine)': {
+                    '&:hover': { bgcolor: active ? '#1C3556' : '#E2E8F0' },
+                  },
+                  '&:active': { transform: 'scale(0.97)' },
+                }}
+              >
+                <OndemandVideoIcon sx={{ fontSize: 15 }} />
+                Tutorial Video
+              </Box>
+            );
+          })()}
         </Box>
 
-        {/* ── Miller columns ────────────────────────────────────────────────── */}
-        {isMiller ? (
+        {/* ── Teacher Tutorial editor (form + live preview) ─────────────────── */}
+        {isTutorial ? (
+          (() => {
+            const previewId = extractYouTubeId(tutorialVideoUrl);
+            return (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.5, alignItems: 'start' }}>
+
+                {/* Form panel */}
+                <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                  <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                    <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                      Video Source
+                    </Typography>
+                  </Box>
+                  <Box sx={{ px: 2.5, py: 2.5 }}>
+                    <Stack spacing={1.75}>
+                      <MuiTextField
+                        fullWidth size="small" label="YouTube Video URL"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={tutorialVideoUrl}
+                        onChange={(e) => setTutorialVideoUrl(e.target.value)}
+                        helperText="Tutors see this on the Get Started screen."
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' }, '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 } } }}
+                      />
+                      <MuiTextField
+                        fullWidth size="small" label="Description"
+                        placeholder="Brief description shown below the video…"
+                        value={tutorialDescription}
+                        onChange={(e) => setTutorialDescription(e.target.value)}
+                        multiline rows={4}
+                        sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
+                      />
+                      <Box display="flex" justifyContent="flex-end">
+                        <Button
+                          variant="contained" startIcon={tutorialSaving ? <MuiCircularProgress size={14} color="inherit" /> : <SaveIcon />}
+                          onClick={saveTutorial} disabled={tutorialSaving}
+                          sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', px: 2.25, boxShadow: 'none', bgcolor: '#1C3556', '&:hover': { bgcolor: '#152943' }, transition: T, '&:active': { transform: 'scale(0.97)' } }}
+                        >
+                          {tutorialSaving ? 'Saving…' : 'Save Tutorial'}
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Paper>
+
+                {/* Live preview panel */}
+                <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                  <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                    <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                      Preview
+                    </Typography>
+                  </Box>
+                  <Box sx={{ p: 2.5 }}>
+                    {previewId ? (
+                      <>
+                        <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', borderRadius: '10px', overflow: 'hidden', bgcolor: '#000' }}>
+                          <Box
+                            component="iframe"
+                            src={`https://www.youtube.com/embed/${previewId}`}
+                            title="Tutorial preview"
+                            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                          />
+                        </Box>
+                        {tutorialDescription.trim() ? (
+                          <Typography sx={{ mt: 1.75, fontSize: 13, lineHeight: 1.6, color: 'text.secondary' }}>
+                            {tutorialDescription}
+                          </Typography>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', borderRadius: '10px', overflow: 'hidden', bgcolor: '#F8FAFC', border: '1px dashed #E2E8F0' }}>
+                        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, px: 3, textAlign: 'center' }}>
+                          <OndemandVideoIcon sx={{ fontSize: 32, color: '#CBD5E1' }} />
+                          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#94A3B8' }}>
+                            {tutorialVideoUrl.trim() ? 'Not a valid YouTube link' : 'Paste a YouTube URL to preview'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+                </Paper>
+              </Box>
+            );
+          })()
+        ) : isMiller ? (
           <Box sx={{ overflowX: 'auto', pb: 2 }}>
             <Box
               sx={{
