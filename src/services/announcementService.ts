@@ -90,10 +90,29 @@ export const getMyExpressedInterests = async (): Promise<{ data: any[]; success:
 export const sendAdminBroadcast = async (payload: {
   subject: string;
   message: string;
-  recipientGroup: 'ALL_MANAGERS' | 'ALL_COORDINATORS' | 'ALL_TEACHERS';
+  recipientGroup: 'ALL_MANAGERS' | 'ALL_COORDINATORS' | 'ALL_TEACHERS' | 'ALL_PARENTS';
 }): Promise<{ data: { recipientCount: number; recipientGroup: string } }> => {
   const { data } = await api.post('/api/announcements/admin/broadcast', payload);
   return data;
+};
+
+export interface IBroadcastLog {
+  _id: string;
+  subject: string;
+  message: string;
+  recipientGroup: string;
+  recipientCount: number;
+  sentByName: string;
+  createdAt: string;
+}
+
+export const getBroadcastHistory = async (page = 1, limit = 20): Promise<{ logs: IBroadcastLog[]; total: number }> => {
+  const { data } = await api.get(`/api/announcements/admin/broadcast/history?page=${page}&limit=${limit}`);
+  return data?.data ?? { logs: [], total: 0 };
+};
+
+export const deleteBroadcastLog = async (logId: string): Promise<void> => {
+  await api.delete(`/api/announcements/admin/broadcast/${logId}`);
 };
 
 export const sendCoordinatorAnnouncement = async (
