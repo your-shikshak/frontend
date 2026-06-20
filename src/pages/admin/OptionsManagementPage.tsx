@@ -589,6 +589,97 @@ const OptionsManagementPage: React.FC = () => {
     }
   };
 
+  // FAQ list panel — reused as the grid's second column (text mode) or
+  // rendered full-width below the form+preview split (video mode).
+  const faqListPanel = (
+    <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+        <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+          {flatOptions.length} question{flatOptions.length !== 1 ? 's' : ''}
+        </Typography>
+      </Box>
+
+      {flatOptions.length === 0 ? (
+        <Box px={3} py={5} textAlign="center">
+          <HelpOutlineIcon sx={{ fontSize: 30, color: '#CBD5E1', mb: 1 }} />
+          <Typography color="text.disabled" fontSize={14}>No FAQs yet — add your first question</Typography>
+        </Box>
+      ) : (
+        [...flatOptions]
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map((o, i, arr) => (
+            <Box
+              key={o._id}
+              sx={{
+                px: 2.5, py: 1.75,
+                borderBottom: i < arr.length - 1 ? '1px solid #F8FAFC' : 'none',
+                bgcolor: faqEditingId === o._id ? '#EFF6FF' : 'transparent',
+                transition: T,
+                '@media (hover: hover) and (pointer: fine)': {
+                  '&:hover': { bgcolor: faqEditingId === o._id ? '#DBEAFE' : '#F8FAFC' },
+                },
+              }}
+            >
+              <Box display="flex" alignItems="flex-start" gap={1}>
+                <Box flex={1} minWidth={0}>
+                  <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                    {o.sortOrder !== undefined && o.sortOrder !== 0 && (
+                      <Box component="span" sx={{ fontSize: 10, fontWeight: 600, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#F1F5F9', color: '#64748B', flexShrink: 0 }}>
+                        #{o.sortOrder}
+                      </Box>
+                    )}
+                    {o.metadata?.answerType === 'video' && (
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: 10, fontWeight: 700, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#EFF6FF', color: '#1C3556', flexShrink: 0 }}>
+                        <OndemandVideoIcon sx={{ fontSize: 12 }} /> VIDEO
+                      </Box>
+                    )}
+                    <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: faqEditingId === o._id ? 'primary.main' : 'text.primary', letterSpacing: -0.2 }}>
+                      {o.label}
+                    </Typography>
+                  </Box>
+                  {o.metadata?.answerType === 'video' ? (
+                    <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {o.metadata?.videoUrl
+                        ? <>🎬 {o.metadata.videoUrl}{o.metadata?.answer ? ` — ${o.metadata.answer}` : ''}</>
+                        : <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No video set</Box>}
+                    </Typography>
+                  ) : (
+                    <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55 }}>
+                      {o.metadata?.answer || <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No answer set</Box>}
+                    </Typography>
+                  )}
+                </Box>
+                <Box display="flex" gap={0.5} flexShrink={0}>
+                  <IconButton
+                    size="small"
+                    onClick={() => startEditFaq(o)}
+                    sx={{
+                      borderRadius: '7px', color: 'text.disabled', transition: T,
+                      '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: 'primary.main', bgcolor: '#EFF6FF' } },
+                      '&:active': { transform: 'scale(0.9)' },
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={() => { setDeletingFlatId(o._id); setConfirmDeleteFlatOpen(true); }}
+                    sx={{
+                      borderRadius: '7px', color: 'text.disabled', transition: T,
+                      '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } },
+                      '&:active': { transform: 'scale(0.9)' },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Box>
+              </Box>
+            </Box>
+          ))
+      )}
+    </Paper>
+  );
+
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
 
@@ -802,8 +893,9 @@ const OptionsManagementPage: React.FC = () => {
             );
           })()
         ) : isFaq ? (
-          /* ── FAQ editor (form + list) ──────────────────────────────────────── */
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '360px 1fr' }, gap: 2.5, alignItems: 'start' }}>
+          /* ── FAQ editor — text: form + list; video: form + live preview (Tutorial style), list below ── */
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: faqIsVideo ? '1fr 1fr' : '360px 1fr' }, gap: 2.5, alignItems: 'start' }}>
 
             {/* Form panel */}
             <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
@@ -873,23 +965,6 @@ const OptionsManagementPage: React.FC = () => {
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
                   />
 
-                  {/* Live YouTube preview for video answers */}
-                  {faqIsVideo && (() => {
-                    const vid = extractYouTubeId(faqVideoUrl.trim());
-                    return vid ? (
-                      <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', borderRadius: '10px', overflow: 'hidden', bgcolor: '#000' }}>
-                        <Box
-                          component="iframe"
-                          src={`https://www.youtube.com/embed/${vid}`}
-                          title="FAQ video preview"
-                          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-                        />
-                      </Box>
-                    ) : null;
-                  })()}
-
                   <MuiTextField
                     size="small" label="Sort Order" type="number" fullWidth value={faqSort}
                     onChange={(e) => setFaqSort(e.target.value)}
@@ -918,93 +993,53 @@ const OptionsManagementPage: React.FC = () => {
               </Box>
             </Paper>
 
-            {/* List panel */}
-            <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-              <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
-                <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
-                  {flatOptions.length} question{flatOptions.length !== 1 ? 's' : ''}
-                </Typography>
-              </Box>
-
-              {flatOptions.length === 0 ? (
-                <Box px={3} py={5} textAlign="center">
-                  <HelpOutlineIcon sx={{ fontSize: 30, color: '#CBD5E1', mb: 1 }} />
-                  <Typography color="text.disabled" fontSize={14}>No FAQs yet — add your first question</Typography>
+            {/* Second column — live video preview (Tutorial style) when video, else the FAQ list */}
+            {faqIsVideo ? (
+              <Paper elevation={0} sx={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                <Box sx={{ px: 2.5, py: 1.75, borderBottom: '1px solid #F1F5F9', bgcolor: '#F8FAFC' }}>
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: '#64748B', textTransform: 'uppercase' }}>
+                    Preview
+                  </Typography>
                 </Box>
-              ) : (
-                [...flatOptions]
-                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                  .map((o, i, arr) => (
-                    <Box
-                      key={o._id}
-                      sx={{
-                        px: 2.5, py: 1.75,
-                        borderBottom: i < arr.length - 1 ? '1px solid #F8FAFC' : 'none',
-                        bgcolor: faqEditingId === o._id ? '#EFF6FF' : 'transparent',
-                        transition: T,
-                        '@media (hover: hover) and (pointer: fine)': {
-                          '&:hover': { bgcolor: faqEditingId === o._id ? '#DBEAFE' : '#F8FAFC' },
-                        },
-                      }}
-                    >
-                      <Box display="flex" alignItems="flex-start" gap={1}>
-                        <Box flex={1} minWidth={0}>
-                          <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                            {o.sortOrder !== undefined && o.sortOrder !== 0 && (
-                              <Box component="span" sx={{ fontSize: 10, fontWeight: 600, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#F1F5F9', color: '#64748B', flexShrink: 0 }}>
-                                #{o.sortOrder}
-                              </Box>
-                            )}
-                            {o.metadata?.answerType === 'video' && (
-                              <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: 10, fontWeight: 700, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#EFF6FF', color: '#1C3556', flexShrink: 0 }}>
-                                <OndemandVideoIcon sx={{ fontSize: 12 }} /> VIDEO
-                              </Box>
-                            )}
-                            <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: faqEditingId === o._id ? 'primary.main' : 'text.primary', letterSpacing: -0.2 }}>
-                              {o.label}
-                            </Typography>
-                          </Box>
-                          {o.metadata?.answerType === 'video' ? (
-                            <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {o.metadata?.videoUrl
-                                ? <>🎬 {o.metadata.videoUrl}{o.metadata?.answer ? ` — ${o.metadata.answer}` : ''}</>
-                                : <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No video set</Box>}
-                            </Typography>
-                          ) : (
-                            <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55 }}>
-                              {o.metadata?.answer || <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No answer set</Box>}
-                            </Typography>
-                          )}
+                <Box sx={{ p: 2.5 }}>
+                  {(() => {
+                    const vid = extractYouTubeId(faqVideoUrl.trim());
+                    return vid ? (
+                      <>
+                        <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', borderRadius: '10px', overflow: 'hidden', bgcolor: '#000' }}>
+                          <Box
+                            component="iframe"
+                            src={`https://www.youtube.com/embed/${vid}`}
+                            title="FAQ video preview"
+                            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                          />
                         </Box>
-                        <Box display="flex" gap={0.5} flexShrink={0}>
-                          <IconButton
-                            size="small"
-                            onClick={() => startEditFaq(o)}
-                            sx={{
-                              borderRadius: '7px', color: 'text.disabled', transition: T,
-                              '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: 'primary.main', bgcolor: '#EFF6FF' } },
-                              '&:active': { transform: 'scale(0.9)' },
-                            }}
-                          >
-                            <EditIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => { setDeletingFlatId(o._id); setConfirmDeleteFlatOpen(true); }}
-                            sx={{
-                              borderRadius: '7px', color: 'text.disabled', transition: T,
-                              '@media (hover: hover) and (pointer: fine)': { '&:hover': { color: '#DC2626', bgcolor: '#FEF2F2' } },
-                              '&:active': { transform: 'scale(0.9)' },
-                            }}
-                          >
-                            <DeleteIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
+                        {faqAnswer.trim() ? (
+                          <Typography sx={{ mt: 1.75, fontSize: 13, lineHeight: 1.6, color: 'text.secondary' }}>
+                            {faqAnswer}
+                          </Typography>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', borderRadius: '10px', overflow: 'hidden', bgcolor: '#F8FAFC', border: '1px dashed #E2E8F0' }}>
+                        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, px: 3, textAlign: 'center' }}>
+                          <OndemandVideoIcon sx={{ fontSize: 32, color: '#CBD5E1' }} />
+                          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#94A3B8' }}>
+                            {faqVideoUrl.trim() ? 'Not a valid YouTube link' : 'Paste a YouTube URL to preview'}
+                          </Typography>
                         </Box>
                       </Box>
-                    </Box>
-                  ))
-              )}
-            </Paper>
+                    );
+                  })()}
+                </Box>
+              </Paper>
+            ) : faqListPanel}
+          </Box>
+
+          {/* In video mode the list moves to a full-width row below the split */}
+          {faqIsVideo && faqListPanel}
           </Box>
         ) : isMiller ? (
           <Box sx={{ overflowX: 'auto', pb: 2 }}>
