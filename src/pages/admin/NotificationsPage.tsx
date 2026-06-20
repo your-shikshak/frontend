@@ -11,10 +11,10 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ImageIcon from '@mui/icons-material/Image';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import HistoryIcon from '@mui/icons-material/History';
-import { sendAdminBroadcast } from '../../services/announcementService';
+import { sendAdminBroadcast, getBroadcastHistory, deleteBroadcastLog, IBroadcastLog } from '../../services/announcementService';
 import { getBanners, createBanner, deleteBanner, IBanner } from '../../services/bannerService';
 
-type Tab = 'push' | 'banner' | 'history';
+type Tab = 'push' | 'push-history' | 'banner' | 'history';
 
 const RECIPIENT_GROUPS = [
   { value: 'ALL_TEACHERS', label: 'All Teachers' },
@@ -33,6 +33,33 @@ const AdminNotificationsPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [pushSuccess, setPushSuccess] = useState('');
   const [pushError, setPushError] = useState('');
+
+  // Push history
+  const [pushLogs, setPushLogs] = useState<IBroadcastLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState('');
+
+  const loadPushLogs = useCallback(async () => {
+    try {
+      setLogsLoading(true);
+      const res = await getBroadcastHistory();
+      setPushLogs(res.logs);
+    } catch {
+      setLogsError('Failed to load push notification history');
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
+
+  const handleDeleteLog = async (id: string) => {
+    if (!window.confirm('Delete this broadcast log?')) return;
+    try {
+      await deleteBroadcastLog(id);
+      setPushLogs((prev) => prev.filter((l) => l._id !== id));
+    } catch {
+      setLogsError('Failed to delete log');
+    }
+  };
 
   // Banner
   const [banners, setBanners] = useState<IBanner[]>([]);
@@ -59,7 +86,8 @@ const AdminNotificationsPage: React.FC = () => {
 
   useEffect(() => {
     if (tab === 'banner' || tab === 'history') loadBanners();
-  }, [tab, loadBanners]);
+    if (tab === 'push-history') loadPushLogs();
+  }, [tab, loadBanners, loadPushLogs]);
 
   const handleSendPush = async () => {
     if (!subject.trim()) return setPushError('Subject is required');
@@ -75,6 +103,7 @@ const AdminNotificationsPage: React.FC = () => {
       setPushSuccess(`Sent to ${(res as any)?.data?.recipientCount ?? 'all'} recipients`);
       setSubject('');
       setMessage('');
+      loadPushLogs();
     } catch (e: any) {
       setPushError(e?.response?.data?.message || e?.message || 'Failed to send');
     } finally {
@@ -148,8 +177,9 @@ const AdminNotificationsPage: React.FC = () => {
       </Stack>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, mb: 3 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
           <Tab value="push" label="Push Notification" icon={<CampaignIcon />} iconPosition="start" />
+          <Tab value="push-history" label="Push History" icon={<HistoryIcon />} iconPosition="start" />
           <Tab value="banner" label="Banner Notification" icon={<ImageIcon />} iconPosition="start" />
           <Tab value="history" label="Banner History" icon={<HistoryIcon />} iconPosition="start" />
         </Tabs>
@@ -199,6 +229,71 @@ const AdminNotificationsPage: React.FC = () => {
             </Button>
           </Stack>
         </Paper>
+      )}
+
+      {/* Push History Tab */}
+      {tab === 'push-history' && (
+        <>
+          {logsError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setLogsError('')}>{logsError}</Alert>}
+          {logsLoading ? (
+            <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>
+          ) : pushLogs.length === 0 ? (
+            <Paper variant="outlined" sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
+              <HistoryIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+              <Typography color="text.secondary">No push notifications sent yet</Typography>
+            </Paper>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#F8FAFC' }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Subject</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Message</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Sent To</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Recipients</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Sent By</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="center">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pushLogs.map((log) => (
+                    <TableRow key={log._id} hover>
+                      <TableCell><Typography variant="body2" fontWeight={600}>{log.subject}</Typography></TableCell>
+                      <TableCell sx={{ maxWidth: 260 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {log.message}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.recipientGroup.replace('ALL_', '').replace('_', ' ')}
+                          size="small"
+                          color={log.recipientGroup === 'ALL_PARENTS' ? 'success' : log.recipientGroup === 'ALL_TEACHERS' ? 'primary' : 'default'}
+                          sx={{ fontWeight: 700, fontSize: 11, textTransform: 'capitalize' }}
+                        />
+                      </TableCell>
+                      <TableCell><Typography variant="body2" fontWeight={700}>{log.recipientCount}</Typography></TableCell>
+                      <TableCell><Typography variant="body2">{log.sentByName}</Typography></TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {new Date(log.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Delete log">
+                          <IconButton size="small" color="error" onClick={() => handleDeleteLog(log._id)}>
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
       )}
 
       {/* Banner Tab */}
