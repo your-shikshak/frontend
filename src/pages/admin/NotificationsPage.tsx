@@ -20,6 +20,7 @@ const RECIPIENT_GROUPS = [
   { value: 'ALL_TEACHERS', label: 'All Teachers' },
   { value: 'ALL_COORDINATORS', label: 'All Coordinators' },
   { value: 'ALL_MANAGERS', label: 'All Managers' },
+  { value: 'ALL_PARENTS', label: 'All Parents' },
 ];
 
 const AdminNotificationsPage: React.FC = () => {
