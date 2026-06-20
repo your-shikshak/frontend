@@ -537,33 +537,47 @@ const OptionsManagementPage: React.FC = () => {
   // Reuses flatOptions / flatRefetch (useOptions(currentType)) for the list.
   const [faqEditingId, setFaqEditingId] = useState<string | null>(null);
   const [faqQuestion, setFaqQuestion] = useState('');
+  const [faqAnswerType, setFaqAnswerType] = useState<'text' | 'video'>('text');
   const [faqAnswer, setFaqAnswer] = useState('');
+  const [faqVideoUrl, setFaqVideoUrl] = useState('');
   const [faqSort, setFaqSort] = useState<number | string>('');
   const [faqSaving, setFaqSaving] = useState(false);
 
   const resetFaqForm = () => {
-    setFaqEditingId(null); setFaqQuestion(''); setFaqAnswer(''); setFaqSort('');
+    setFaqEditingId(null); setFaqQuestion(''); setFaqAnswerType('text');
+    setFaqAnswer(''); setFaqVideoUrl(''); setFaqSort('');
   };
 
   const startEditFaq = (o: OptionItem) => {
     setFaqEditingId(o._id);
     setFaqQuestion(o.label);
+    setFaqAnswerType(o.metadata?.answerType === 'video' ? 'video' : 'text');
     setFaqAnswer(o.metadata?.answer ?? '');
+    setFaqVideoUrl(o.metadata?.videoUrl ?? '');
     setFaqSort(o.sortOrder ?? '');
   };
 
+  // Video answers require a valid YouTube link; description (answer) stays optional.
+  // Text answers require the answer body.
+  const faqIsVideo = faqAnswerType === 'video';
+  const faqValid = !!faqQuestion.trim() && (
+    faqIsVideo ? !!extractYouTubeId(faqVideoUrl.trim()) : !!faqAnswer.trim()
+  );
+
   const saveFaq = async () => {
     const q = faqQuestion.trim();
-    const a = faqAnswer.trim();
-    if (!q || !a) return;
+    if (!faqValid) return;
     setFaqSaving(true);
     try {
+      const metadata = faqIsVideo
+        ? { answerType: 'video', videoUrl: faqVideoUrl.trim(), answer: faqAnswer.trim() }
+        : { answerType: 'text', answer: faqAnswer.trim() };
       await createOrUpdateOption(faqEditingId || undefined, {
         type: FAQ_TYPE,
         label: q,
         value: q.toUpperCase().replace(/\s+/g, '_').slice(0, 60),
         sortOrder: faqSort === '' ? 0 : Number(faqSort),
-        metadata: { answer: a },
+        metadata,
       });
       showSnackbar(faqEditingId ? 'FAQ updated' : 'FAQ added');
       resetFaqForm();
@@ -805,11 +819,77 @@ const OptionsManagementPage: React.FC = () => {
                     onChange={(e) => setFaqQuestion(e.target.value)}
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' }, '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 } } }}
                   />
+
+                  {/* Answer type toggle */}
+                  <Box>
+                    <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: '#94A3B8', textTransform: 'uppercase', mb: 0.75 }}>
+                      Answer Type
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.75 }}>
+                      {([
+                        { v: 'text' as const, label: 'Text', icon: <HelpOutlineIcon sx={{ fontSize: 15 }} /> },
+                        { v: 'video' as const, label: 'Video', icon: <OndemandVideoIcon sx={{ fontSize: 15 }} /> },
+                      ]).map((opt) => {
+                        const active = faqAnswerType === opt.v;
+                        return (
+                          <Box
+                            key={opt.v}
+                            component="button"
+                            type="button"
+                            onClick={() => setFaqAnswerType(opt.v)}
+                            sx={{
+                              flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 0.6,
+                              px: 1.5, py: 0.85, border: '1px solid', cursor: 'pointer', borderRadius: '9px',
+                              fontSize: 12.5, fontWeight: 700, transition: T,
+                              bgcolor: active ? '#1C3556' : '#F8FAFC',
+                              color: active ? '#fff' : '#64748B',
+                              borderColor: active ? '#1C3556' : '#E2E8F0',
+                              '&:active': { transform: 'scale(0.97)' },
+                            }}
+                          >
+                            {opt.icon}
+                            {opt.label}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </Box>
+
+                  {faqIsVideo && (
+                    <MuiTextField
+                      size="small" label="YouTube Video URL" fullWidth value={faqVideoUrl}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      onChange={(e) => setFaqVideoUrl(e.target.value)}
+                      error={!!faqVideoUrl.trim() && !extractYouTubeId(faqVideoUrl.trim())}
+                      helperText={!!faqVideoUrl.trim() && !extractYouTubeId(faqVideoUrl.trim()) ? 'Not a valid YouTube link' : 'Shown as the video answer in the app'}
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' }, '&.Mui-focused fieldset': { borderColor: 'primary.main', borderWidth: 1.5 } } }}
+                    />
+                  )}
+
                   <MuiTextField
-                    size="small" label="Answer" fullWidth multiline rows={5} value={faqAnswer}
+                    size="small" label={faqIsVideo ? 'Description (optional)' : 'Answer'} fullWidth multiline rows={faqIsVideo ? 3 : 5} value={faqAnswer}
                     onChange={(e) => setFaqAnswer(e.target.value)}
+                    placeholder={faqIsVideo ? 'Short text shown below the video…' : ''}
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9px', fontSize: 13, '& fieldset': { borderColor: '#E2E8F0' } } }}
                   />
+
+                  {/* Live YouTube preview for video answers */}
+                  {faqIsVideo && (() => {
+                    const vid = extractYouTubeId(faqVideoUrl.trim());
+                    return vid ? (
+                      <Box sx={{ position: 'relative', width: '100%', pt: '56.25%', borderRadius: '10px', overflow: 'hidden', bgcolor: '#000' }}>
+                        <Box
+                          component="iframe"
+                          src={`https://www.youtube.com/embed/${vid}`}
+                          title="FAQ video preview"
+                          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                        />
+                      </Box>
+                    ) : null;
+                  })()}
+
                   <MuiTextField
                     size="small" label="Sort Order" type="number" fullWidth value={faqSort}
                     onChange={(e) => setFaqSort(e.target.value)}
@@ -827,7 +907,7 @@ const OptionsManagementPage: React.FC = () => {
                     )}
                     <Button
                       variant="contained" onClick={saveFaq}
-                      disabled={faqSaving || !faqQuestion.trim() || !faqAnswer.trim()}
+                      disabled={faqSaving || !faqValid}
                       startIcon={faqSaving ? <MuiCircularProgress size={14} color="inherit" /> : <SaveIcon />}
                       sx={{ fontWeight: 700, fontSize: 13, borderRadius: '9px', px: 2.25, boxShadow: 'none', bgcolor: '#1C3556', '&:hover': { bgcolor: '#152943' }, transition: T, '&:active': { transform: 'scale(0.97)' } }}
                     >
@@ -875,13 +955,26 @@ const OptionsManagementPage: React.FC = () => {
                                 #{o.sortOrder}
                               </Box>
                             )}
+                            {o.metadata?.answerType === 'video' && (
+                              <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4, fontSize: 10, fontWeight: 700, px: 0.75, py: 0.2, borderRadius: '4px', bgcolor: '#EFF6FF', color: '#1C3556', flexShrink: 0 }}>
+                                <OndemandVideoIcon sx={{ fontSize: 12 }} /> VIDEO
+                              </Box>
+                            )}
                             <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: faqEditingId === o._id ? 'primary.main' : 'text.primary', letterSpacing: -0.2 }}>
                               {o.label}
                             </Typography>
                           </Box>
-                          <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55 }}>
-                            {o.metadata?.answer || <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No answer set</Box>}
-                          </Typography>
+                          {o.metadata?.answerType === 'video' ? (
+                            <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {o.metadata?.videoUrl
+                                ? <>🎬 {o.metadata.videoUrl}{o.metadata?.answer ? ` — ${o.metadata.answer}` : ''}</>
+                                : <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No video set</Box>}
+                            </Typography>
+                          ) : (
+                            <Typography sx={{ fontSize: 12.5, color: 'text.secondary', lineHeight: 1.55 }}>
+                              {o.metadata?.answer || <Box component="span" sx={{ color: 'warning.main', fontStyle: 'italic' }}>No answer set</Box>}
+                            </Typography>
+                          )}
                         </Box>
                         <Box display="flex" gap={0.5} flexShrink={0}>
                           <IconButton
