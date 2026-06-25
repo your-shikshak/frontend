@@ -44,8 +44,21 @@ export const getClassSessionsForCycle = async (params: {
   return data as ApiResponse<IClassSession[]>;
 };
 
+export const rescheduleSession = async (params: {
+  sessionId: string;
+  newDate: string;       // ISO date string
+  newTimeSlot?: string;  // e.g. "10:00 - 11:00"
+}): Promise<ApiResponse<IClassSession>> => {
+  const { data } = await api.patch(`/api/class-sessions/${params.sessionId}/reschedule`, {
+    newDate: params.newDate,
+    ...(params.newTimeSlot ? { newTimeSlot: params.newTimeSlot } : {}),
+  });
+  return data as ApiResponse<IClassSession>;
+};
+
 export default {
   getMyTutorSessionsForCycle,
   getCoordinatorSessionsForCycle,
   getClassSessionsForCycle,
+  rescheduleSession,
 };

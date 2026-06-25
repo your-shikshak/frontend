@@ -36,8 +36,8 @@ import SchoolIcon from '@mui/icons-material/School';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import { getMyClasses, updateFinalClassSchedule } from '../../services/finalClassService';
-import { IFinalClass } from '../../types';
-import { getMyTutorSessionsForCycle } from '../../services/classSessionService';
+import { IFinalClass, IClassSession } from '../../types';
+import { getMyTutorSessionsForCycle, rescheduleSession } from '../../services/classSessionService';
 import ScheduleTestModal from '../../components/tutors/ScheduleTestModal';
 import { FINAL_CLASS_STATUS } from '../../constants';
 import { useSelector } from 'react-redux';
@@ -317,6 +317,13 @@ const TutorTimetablePage: React.FC = () => {
 
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [testModalClass, setTestModalClass] = useState<IFinalClass | null>(null);
+
+  // ─── Reschedule state ────────────────────────────────
+  const [rescheduleSession_, setRescheduleSession] = useState<IClassSession | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleSaving, setRescheduleSaving] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   // ─── Mobile week state ───────────────────────
   const [mobileWeekStart, setMobileWeekStart] = useState<Date>(() => {
@@ -687,6 +694,40 @@ const TutorTimetablePage: React.FC = () => {
       setScheduleError(msg);
     } finally {
       setScheduleSaving(false);
+    }
+  };
+
+  const openReschedule = (session: IClassSession) => {
+    const d = new Date(session.sessionDate);
+    setRescheduleDate(d.toISOString().slice(0, 10));
+    const slotParts = session.timeSlot?.split(' - ');
+    setRescheduleTime(slotParts?.[0]?.trim() || '');
+    setRescheduleError(null);
+    setRescheduleSession(session);
+  };
+
+  const handleRescheduleConfirm = async () => {
+    if (!rescheduleSession_ || !rescheduleDate) return;
+    setRescheduleSaving(true);
+    setRescheduleError(null);
+    try {
+      const slotParts = rescheduleSession_.timeSlot?.split(' - ');
+      const origEnd = slotParts?.[1]?.trim() || '';
+      const newTimeSlot = rescheduleTime && origEnd ? `${rescheduleTime} - ${origEnd}` : undefined;
+      await rescheduleSession({ sessionId: rescheduleSession_.id, newDate: new Date(rescheduleDate).toISOString(), newTimeSlot });
+      // Update cycleSessions in place
+      setCycleSessions((prev) =>
+        prev.map((s) =>
+          s.id === rescheduleSession_!.id
+            ? { ...s, sessionDate: new Date(rescheduleDate).toISOString(), ...(newTimeSlot ? { timeSlot: newTimeSlot } : {}) }
+            : s
+        )
+      );
+      setRescheduleSession(null);
+    } catch (e: any) {
+      setRescheduleError(e?.response?.data?.message || 'Failed to reschedule session.');
+    } finally {
+      setRescheduleSaving(false);
     }
   };
 
@@ -1551,25 +1592,10 @@ const TutorTimetablePage: React.FC = () => {
         <DialogContent sx={{ p: { xs: 2, sm: 4 }, bgcolor: '#f8fafc' }}>
           {selectedClasses.length === 0 ? (
             <Box sx={{ py: { xs: 6, sm: 10 }, textAlign: 'center' }}>
-              <Box
-                sx={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 2,
-                  bgcolor: alpha('#6366f1', 0.05),
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mb: 3,
-                  color: alpha('#6366f1', 0.3),
-                  transform: 'rotate(-5deg)',
-                }}
-              >
+              <Box sx={{ width: 72, height: 72, borderRadius: 2, bgcolor: alpha('#6366f1', 0.05), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', mb: 3, color: alpha('#6366f1', 0.3), transform: 'rotate(-5deg)' }}>
                 <EventNoteIcon sx={{ fontSize: 32 }} />
               </Box>
-              <Typography variant="h6" gutterBottom fontWeight={800} sx={{ color: '#1e293b' }}>
-                Agenda Clear
-              </Typography>
+              <Typography variant="h6" gutterBottom fontWeight={800} sx={{ color: '#1e293b' }}>Agenda Clear</Typography>
               <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 600, maxWidth: 300, mx: 'auto' }}>
                 No active teaching sessions are scheduled for this date.
               </Typography>
@@ -1583,69 +1609,46 @@ const TutorTimetablePage: React.FC = () => {
                 const address: string = (cls as any).location || (sched.address as string) || '-';
                 const isRescheduled = Boolean((cls as any).__isRescheduledForDate);
 
+                // Find the matching ClassSession record for this class on this date
+                const normalize = (d: Date) => { const nd = new Date(d); nd.setHours(0,0,0,0); return nd.getTime(); };
+                const dateKey = selectedDate ? normalize(selectedDate) : 0;
+                const matchedSession = cycleSessions.find((s: any) => {
+                  const sd = normalize(new Date(s.sessionDate));
+                  const clsId = s.finalClass?._id || s.finalClass?.id || s.finalClass;
+                  return sd === dateKey && String(clsId) === String((cls as any)._id || cls.id);
+                }) as IClassSession | undefined;
+
+                const sessionStatus: string = matchedSession?.status || 'PLANNED';
+                const sessionNumber: number | undefined = matchedSession?.sessionNumber;
+                const canReschedule = sessionStatus === 'PLANNED' && selectedDate && selectedDate > new Date();
+
+                const statusColor = sessionStatus === 'COMPLETED' ? '#10b981' : sessionStatus === 'CANCELLED' ? '#ef4444' : '#6366f1';
+                const statusBg = sessionStatus === 'COMPLETED' ? alpha('#10b981', 0.08) : sessionStatus === 'CANCELLED' ? alpha('#ef4444', 0.08) : alpha('#6366f1', 0.08);
+                const statusLabel = sessionStatus === 'COMPLETED' ? 'Completed' : sessionStatus === 'CANCELLED' ? 'Cancelled' : 'Scheduled';
+
                 return (
                   <Box
                     key={cls.id || index}
-                    sx={{
-                      p: { xs: 2.5, sm: 3 },
-                      borderRadius: 2,
-                      bgcolor: '#ffffff',
-                      boxShadow: '0 4px 15px rgba(15, 23, 42, 0.04)',
-                      border: isRescheduled ? `1px solid ${alpha('#f59e0b', 0.2)}` : 'none',
-                      position: 'relative',
-                    }}
+                    sx={{ p: { xs: 2.5, sm: 3 }, borderRadius: 2, bgcolor: '#ffffff', boxShadow: '0 4px 15px rgba(15, 23, 42, 0.04)', border: isRescheduled ? `1px solid ${alpha('#f59e0b', 0.2)}` : 'none', position: 'relative' }}
                   >
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3}>
                       <Box display="flex" alignItems="center" gap={2}>
-                        <Avatar
-                          sx={{
-                            width: 52,
-                            height: 52,
-                            bgcolor: alpha('#6366f1', 0.08),
-                            color: '#6366f1',
-                            fontWeight: 900,
-                            fontSize: '1.2rem',
-                            fontFamily: "'Manrope', sans-serif"
-                          }}
-                        >
+                        <Avatar sx={{ width: 52, height: 52, bgcolor: alpha('#6366f1', 0.08), color: '#6366f1', fontWeight: 900, fontSize: '1.2rem' }}>
                           {cls.studentName?.charAt(0) || 'S'}
                         </Avatar>
                         <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 900, color: '#0f172a', lineHeight: 1.2, mb: 0.5 }}>
-                            {cls.studentName}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 700 }}>
-                            {className || 'N/A'}
-                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 900, color: '#0f172a', lineHeight: 1.2, mb: 0.5 }}>{cls.studentName}</Typography>
+                          <Typography variant="body2" sx={{ color: '#64748b', fontWeight: 700 }}>{className || 'N/A'}</Typography>
                         </Box>
                       </Box>
-                      <Stack direction="row" spacing={1}>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
                         {isRescheduled && (
-                          <Chip
-                            label="RESCHEDULED"
-                            size="small"
-                            sx={{
-                              height: 22,
-                              fontSize: '0.6rem',
-                              fontWeight: 900,
-                              letterSpacing: '0.05em',
-                              bgcolor: alpha('#f59e0b', 0.1),
-                              color: '#d97706',
-                            }}
-                          />
+                          <Chip label="RESCHEDULED" size="small" sx={{ height: 22, fontSize: '0.6rem', fontWeight: 900, bgcolor: alpha('#f59e0b', 0.1), color: '#d97706' }} />
                         )}
-                        <Chip
-                          label={`SESSION ${index + 1}`}
-                          size="small"
-                          sx={{
-                            height: 22,
-                            fontSize: '0.6rem',
-                            fontWeight: 900,
-                            letterSpacing: '0.05em',
-                            bgcolor: alpha('#6366f1', 0.08),
-                            color: '#6366f1',
-                          }}
-                        />
+                        {sessionNumber != null && (
+                          <Chip label={`#${sessionNumber}`} size="small" sx={{ height: 22, fontSize: '0.6rem', fontWeight: 900, bgcolor: alpha('#6366f1', 0.08), color: '#6366f1' }} />
+                        )}
+                        <Chip label={statusLabel.toUpperCase()} size="small" sx={{ height: 22, fontSize: '0.6rem', fontWeight: 900, bgcolor: statusBg, color: statusColor }} />
                       </Stack>
                     </Box>
 
@@ -1670,40 +1673,20 @@ const TutorTimetablePage: React.FC = () => {
                       </Grid>
                     </Grid>
 
-                    <Box display="flex" gap={2} pt={2.5} borderTop={`1px solid ${alpha('#e2e8f0', 0.8)}`}>
-                      <Button
-                        variant="outlined"
-                        fullWidth
-                        onClick={() => openScheduleModal(cls)}
-                        sx={{
-                          borderRadius: 1.5,
-                          textTransform: 'none',
-                          fontWeight: 800,
-                          fontSize: '0.75rem',
-                          borderColor: alpha('#6366f1', 0.2),
-                          color: '#6366f1',
-                          py: 1.25,
-                          '&:hover': { borderColor: '#6366f1', bgcolor: alpha('#6366f1', 0.04) }
-                        }}
-                      >
-                        Modify Schedule
+                    <Box display="flex" gap={2} pt={2.5} borderTop={`1px solid ${alpha('#e2e8f0', 0.8)}`} flexWrap="wrap">
+                      <Button variant="outlined" onClick={() => openScheduleModal(cls)}
+                        sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 800, fontSize: '0.75rem', borderColor: alpha('#6366f1', 0.2), color: '#6366f1', py: 1.25, flex: 1, minWidth: 120, '&:hover': { borderColor: '#6366f1', bgcolor: alpha('#6366f1', 0.04) } }}>
+                        Permanent Shift
                       </Button>
+                      {canReschedule && matchedSession && (
+                        <Button variant="outlined" onClick={() => openReschedule(matchedSession)}
+                          sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 800, fontSize: '0.75rem', borderColor: alpha('#f59e0b', 0.3), color: '#d97706', py: 1.25, flex: 1, minWidth: 120, '&:hover': { borderColor: '#f59e0b', bgcolor: alpha('#f59e0b', 0.04) } }}>
+                          Reschedule
+                        </Button>
+                      )}
                       {Boolean((cls as any).coordinator) && (
-                        <Button
-                          variant="contained"
-                          fullWidth
-                          onClick={() => openTestModalForClass(cls)}
-                          sx={{
-                            borderRadius: 1.5,
-                            textTransform: 'none',
-                            fontWeight: 800,
-                            fontSize: '0.75rem',
-                            bgcolor: '#6366f1',
-                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)',
-                            py: 1.25,
-                            '&:hover': { bgcolor: '#4f46e5', boxShadow: '0 6px 16px rgba(99, 102, 241, 0.3)' }
-                          }}
-                        >
+                        <Button variant="contained" onClick={() => openTestModalForClass(cls)}
+                          sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 800, fontSize: '0.75rem', bgcolor: '#6366f1', boxShadow: '0 4px 12px rgba(99,102,241,0.2)', py: 1.25, flex: 1, minWidth: 120, '&:hover': { bgcolor: '#4f46e5' } }}>
                           Schedule Test
                         </Button>
                       )}
@@ -1723,6 +1706,87 @@ const TutorTimetablePage: React.FC = () => {
           finalClass={testModalClass}
         />
       )}
+
+      {/* ─── Reschedule Session Dialog ──────────────────── */}
+      <Dialog
+        open={!!rescheduleSession_}
+        onClose={() => !rescheduleSaving && setRescheduleSession(null)}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
+      >
+        <DialogTitle sx={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: '#fff', pb: 3, pt: 3.5, px: 3.5 }}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: alpha('#f59e0b', 0.15), display: 'flex' }}>
+              <TodayIcon sx={{ fontSize: 20, color: '#fbbf24' }} />
+            </Box>
+            <Box>
+              <Typography fontWeight={900} sx={{ fontSize: '1.1rem' }}>Reschedule Session</Typography>
+              {rescheduleSession_ && (
+                <Typography variant="caption" sx={{ color: alpha('#fff', 0.55), fontWeight: 600 }}>
+                  {rescheduleSession_.finalClass?.studentName} · #{rescheduleSession_.sessionNumber}
+                </Typography>
+              )}
+            </Box>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 3, px: 3.5, bgcolor: '#fff' }}>
+          {rescheduleError && (
+            <Box mb={2} p={1.5} borderRadius={1.5} bgcolor={alpha('#ef4444', 0.05)}>
+              <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800 }}>{rescheduleError}</Typography>
+            </Box>
+          )}
+
+          {rescheduleSession_ && (
+            <Box mb={2.5} p={1.5} borderRadius={1.5} bgcolor={alpha('#f8fafc', 1)} display="flex" alignItems="center" gap={1}>
+              <SchoolIcon sx={{ fontSize: 16, color: '#64748b' }} />
+              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>
+                Current:{' '}
+                <strong style={{ color: '#1e293b' }}>
+                  {new Date(rescheduleSession_.sessionDate).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                  {rescheduleSession_.timeSlot ? ` · ${rescheduleSession_.timeSlot}` : ''}
+                </strong>
+              </Typography>
+            </Box>
+          )}
+
+          <Box mb={2.5}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#64748b', fontWeight: 800, letterSpacing: '0.05em' }}>NEW DATE</Typography>
+            <TextField
+              fullWidth size="small" type="date"
+              value={rescheduleDate}
+              onChange={(e) => setRescheduleDate(e.target.value)}
+              inputProps={{ min: new Date().toISOString().slice(0, 10) }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, bgcolor: '#f8fafc', '& fieldset': { borderColor: alpha('#e2e8f0', 1) } } }}
+            />
+          </Box>
+
+          <Box>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#64748b', fontWeight: 800, letterSpacing: '0.05em' }}>
+              NEW START TIME <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#94a3b8' }}>(optional — keeps original if blank)</Typography>
+            </Typography>
+            <TextField
+              fullWidth size="small" type="time"
+              InputLabelProps={{ shrink: true }}
+              value={rescheduleTime}
+              onChange={(e) => setRescheduleTime(e.target.value)}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, bgcolor: '#f8fafc', '& fieldset': { borderColor: alpha('#e2e8f0', 1) } } }}
+            />
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3.5, pb: 3.5, pt: 1.5, bgcolor: '#fff' }}>
+          <Button onClick={() => setRescheduleSession(null)} disabled={rescheduleSaving}
+            sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 800, color: '#64748b', px: 2.5 }}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleRescheduleConfirm} disabled={rescheduleSaving || !rescheduleDate}
+            sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 900, bgcolor: '#f59e0b', boxShadow: 'none', px: 4, py: 1.1, '&:hover': { bgcolor: '#d97706' }, '&.Mui-disabled': { bgcolor: alpha('#f59e0b', 0.3) } }}>
+            {rescheduleSaving ? 'Saving…' : 'Confirm Reschedule'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* ─── Set Timetable Modal ─────────────────────── */}
       <Dialog
