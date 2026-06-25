@@ -26,6 +26,7 @@ import { validateEmail, validatePhone } from '@/utils/leadValidation';
 import { useOptions } from '@/hooks/useOptions';
 import { registrationOtpAPI } from '@/api/client';
 import { toast } from 'sonner';
+import { CurriculumSelectorDialog } from './CurriculumSelectorDialog';
 
 // ── Step definitions ──────────────────────────────────────────────────────────
 const STEPS = ['Personal', 'Professional', 'Location', 'Availability', 'Security'];
@@ -92,6 +93,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
   const [otpSending,     setOtpSending]     = useState(false);
   const [otpVerifying,   setOtpVerifying]   = useState(false);
   const [otpError,       setOtpError]       = useState('');
+  const [curriculumOpen, setCurriculumOpen] = useState(false);
 
   const handleSendOtp = async () => {
     if (!formData.email || !validateEmail(formData.email)) {
@@ -121,6 +123,7 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
 
   // ── Options ────────────────────────────────────────────────────────────────
   const { options: subjectOptions } = useOptions('SUBJECT');
+  const subjectLabelMap = useMemo(() => Object.fromEntries(subjectOptions.map(o => [o._id, o.label])), [subjectOptions]);
   const { options: extracurricularOptions } = useOptions('EXTRACURRICULAR_ACTIVITY');
   const extracurricularLabels = useMemo(() => extracurricularOptions.map((o) => o.label), [extracurricularOptions]);
   const { options: cityOptions } = useOptions('CITY');
@@ -307,43 +310,47 @@ export const TutorLeadForm = ({ onSubmit, isLoading, initialData, mode = 'create
 
       <Grid item xs={12}>
         <Box sx={{ p: 2.5, borderRadius: 2, bgcolor: '#F8FAFC', border: '1.5px dashed #CBD5E1' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <LibraryBooksIcon sx={{ fontSize: 16, color: '#001F54' }} />
-            <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#001F54' }}>Select Your Subjects *</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <LibraryBooksIcon sx={{ fontSize: 16, color: '#001F54' }} />
+              <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#001F54' }}>Select Your Subjects *</Typography>
+            </Box>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={isFieldReadOnly('subjects')}
+              onClick={() => setCurriculumOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 700, borderColor: '#001F54', color: '#001F54', borderRadius: 1.5, fontSize: 12, '&:hover': { bgcolor: alpha('#001F54', 0.05) } }}
+            >
+              {formData.subjects.length > 0 ? `${formData.subjects.length} selected — Edit` : 'Choose Subjects'}
+            </Button>
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-            Select all subjects you can teach.
+            Pick subjects by board and class using the curriculum picker.
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {subjectOptions.map((opt) => {
-              const selectedIds: string[] = formData.subjects.map((s: any) => typeof s === 'string' ? s : String(s?._id)).filter(Boolean);
-              const isSelected = selectedIds.includes(opt._id);
-              return (
+          {formData.subjects.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {(formData.subjects as string[]).map((id) => (
                 <Chip
-                  key={opt._id}
-                  label={opt.label}
-                  clickable
-                  disabled={isFieldReadOnly('subjects')}
-                  onClick={() => {
-                    const next = isSelected
-                      ? selectedIds.filter((id) => id !== opt._id)
-                      : [...selectedIds, opt._id];
-                    setFormData(p => ({ ...p, subjects: next }));
-                  }}
-                  sx={{
-                    fontWeight: 600,
-                    bgcolor: isSelected ? '#001F54' : 'white',
-                    color: isSelected ? 'white' : '#374151',
-                    border: '1.5px solid',
-                    borderColor: isSelected ? '#001F54' : '#CBD5E1',
-                    '&:hover': { bgcolor: isSelected ? '#001F54' : '#F1F5F9' },
-                  }}
+                  key={id}
+                  label={subjectLabelMap[id] || id}
+                  size="small"
+                  onDelete={isFieldReadOnly('subjects') ? undefined : () =>
+                    setFormData(p => ({ ...p, subjects: (p.subjects as string[]).filter((s: string) => s !== id) }))
+                  }
+                  sx={{ fontWeight: 600, bgcolor: alpha('#001F54', 0.08), color: '#001F54', border: 'none', fontSize: 11 }}
                 />
-              );
-            })}
-          </Box>
+              ))}
+            </Box>
+          )}
         </Box>
         {errors.subjects && <FormHelperText error sx={{ mt: 0.5 }}>{errors.subjects}</FormHelperText>}
+        <CurriculumSelectorDialog
+          open={curriculumOpen}
+          onClose={() => setCurriculumOpen(false)}
+          initialSelectedIds={(formData.subjects as string[]).map((s: any) => typeof s === 'string' ? s : String(s?._id)).filter(Boolean)}
+          onSave={(ids) => { setFormData(p => ({ ...p, subjects: ids })); setCurriculumOpen(false); }}
+        />
       </Grid>
 
       <Grid item xs={12}>
