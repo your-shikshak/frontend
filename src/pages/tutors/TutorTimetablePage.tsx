@@ -35,10 +35,11 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import SchoolIcon from '@mui/icons-material/School';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
-import { getMyClasses, updateFinalClassSchedule } from '../../services/finalClassService';
+import { getMyClasses, updateFinalClassSchedule, getPendingCycleStarts, PendingCycleClass } from '../../services/finalClassService';
 import { IFinalClass, IClassSession } from '../../types';
 import { getMyTutorSessionsForCycle, rescheduleSession } from '../../services/classSessionService';
 import ScheduleTestModal from '../../components/tutors/ScheduleTestModal';
+import CycleStartDialog from '../../components/tutors/CycleStartDialog';
 import { FINAL_CLASS_STATUS } from '../../constants';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '../../store/slices/authSlice';
@@ -318,6 +319,9 @@ const TutorTimetablePage: React.FC = () => {
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [testModalClass, setTestModalClass] = useState<IFinalClass | null>(null);
 
+  // ─── Pending cycle starts ────────────────────────────
+  const [pendingCycles, setPendingCycles] = useState<PendingCycleClass[]>([]);
+
   // ─── Reschedule state ────────────────────────────────
   const [rescheduleSession_, setRescheduleSession] = useState<IClassSession | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
@@ -385,8 +389,12 @@ const TutorTimetablePage: React.FC = () => {
           return;
         }
         const tutorId = (user as any).id || (user as any)._id;
-        const res = await getMyClasses(tutorId, FINAL_CLASS_STATUS.ACTIVE);
+        const [res, pendingRes] = await Promise.all([
+          getMyClasses(tutorId, FINAL_CLASS_STATUS.ACTIVE),
+          getPendingCycleStarts().catch(() => ({ data: [] as PendingCycleClass[] })),
+        ]);
         setClasses(res.data || []);
+        if (pendingRes.data?.length) setPendingCycles(pendingRes.data);
       } catch (e: any) {
         const msg = e?.response?.data?.message || 'Failed to load timetable';
         setError(msg);
@@ -811,6 +819,21 @@ const TutorTimetablePage: React.FC = () => {
   }
 
   return (
+    <>
+    {pendingCycles.length > 0 && (
+      <CycleStartDialog
+        classes={pendingCycles}
+        onDone={() => {
+          setPendingCycles([]);
+          // Refresh sessions after cycle start dates are set
+          const month = currentMonth.getMonth() + 1;
+          const year = currentMonth.getFullYear();
+          getMyTutorSessionsForCycle({ month, year, ensure: true })
+            .then((r) => setCycleSessions(Array.isArray(r.data) ? r.data : []))
+            .catch(() => {});
+        }}
+      />
+    )}
     <Container maxWidth="xl" disableGutters sx={{ px: { xs: 2, sm: 0 }, pb: { xs: 10, sm: 0 } }}>
       {/* ─── Premium Header ──────────────────────────── */}
       <Box
@@ -1982,6 +2005,7 @@ const TutorTimetablePage: React.FC = () => {
         </DialogActions>
       </Dialog>
     </Container>
+    </>
   );
 };
 
