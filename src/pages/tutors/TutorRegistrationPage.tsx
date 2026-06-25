@@ -76,7 +76,13 @@ const TutorLeadRegistration = () => {
         );
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || 'Registration failed. Please try again.';
+      // Server returned a human-readable message → show it.
+      // Anything else (Zod parse errors, network issues, JS exceptions) → generic fallback.
+      const serverMsg: string | undefined = error?.response?.data?.message;
+      const isUserFacing = typeof serverMsg === 'string' && serverMsg.trim().length > 0;
+      const msg = isUserFacing
+        ? serverMsg!.trim()
+        : 'Something went wrong. Please check your details and try again.';
       setErrorMessage(msg);
       setErrorPopupOpen(true);
     } finally {
