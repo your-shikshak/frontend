@@ -171,6 +171,28 @@ export const renewClass = async (
   return data as ApiResponse<any>;
 };
 
+export interface PendingCycleClass {
+  _id: string;
+  className: string;
+  studentName: string;
+  classesPerMonth: number;
+  currentCycleNumber: number;
+  schedule?: { daysOfWeek?: string[]; timeSlot?: string };
+}
+
+export const getPendingCycleStarts = async (): Promise<ApiResponse<PendingCycleClass[]>> => {
+  const { data } = await api.get('/api/final-classes/tutor/pending-cycle-start');
+  return data as ApiResponse<PendingCycleClass[]>;
+};
+
+export const setCycleStartDate = async (
+  classId: string,
+  startDate: string,
+): Promise<ApiResponse<any>> => {
+  const { data } = await api.post(`/api/final-classes/${classId}/start-cycle`, { startDate });
+  return data as ApiResponse<any>;
+};
+
 export default {
 	getMyClasses,
 	getFinalClasses,
