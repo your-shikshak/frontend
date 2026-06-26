@@ -43,6 +43,7 @@ import TutorPerformancePage from "./pages/coordinator/TutorPerformancePage";
 import PaymentTrackingPage from "./pages/coordinator/PaymentTrackingPage";
 import CoordinatorProfilePage from "./pages/coordinator/CoordinatorProfilePage";
 import ShiftRequestsPage from "./pages/coordinator/ShiftRequestsPage";
+import RescheduleRequestsPage from "./pages/coordinator/RescheduleRequestsPage";
 import ClassRequestsPage from "./pages/manager/ClassRequestsPage";
 import CoordinatorAttendanceSheetTablePage from "./pages/coordinator/CoordinatorAttendanceSheetTablePage";
 import CoordinatorsPage from "./pages/manager/CoordinatorsPage";
@@ -403,6 +404,16 @@ const App: React.FC = () => {
                     allowedRoles={[USER_ROLES.COORDINATOR, USER_ROLES.ADMIN]}
                   >
                     <ShiftRequestsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="reschedule-requests"
+                element={
+                  <ProtectedRoute
+                    allowedRoles={[USER_ROLES.COORDINATOR, USER_ROLES.ADMIN]}
+                  >
+                    <RescheduleRequestsPage />
                   </ProtectedRoute>
                 }
               />
