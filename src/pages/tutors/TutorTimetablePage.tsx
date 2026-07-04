@@ -709,8 +709,6 @@ const TutorTimetablePage: React.FC = () => {
   const openReschedule = (session: IClassSession) => {
     const d = new Date(session.sessionDate);
     setRescheduleDate(d.toISOString().slice(0, 10));
-    const slotParts = session.timeSlot?.split(' - ');
-    setRescheduleTime(slotParts?.[0]?.trim() || '');
     setRescheduleError(null);
     setRescheduleSession(session);
   };
