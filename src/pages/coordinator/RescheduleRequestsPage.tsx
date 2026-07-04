@@ -173,11 +173,22 @@ const RescheduleRequestsPage: React.FC = () => {
                           <Typography variant="caption" color="text.secondary">{subjects}</Typography>
                         </Box>
                       </Box>
-                      <Chip
-                        label="Pending"
-                        size="small"
-                        sx={{ fontWeight: 700, borderRadius: 1.5, bgcolor: alpha(theme.palette.warning.main, 0.1), color: 'warning.main' }}
-                      />
+                      <Box display="flex" gap={0.75}>
+                        <Chip
+                          label={req.requestType === 'TUTOR' ? 'Tutor' : 'Parent'}
+                          size="small"
+                          sx={{
+                            fontWeight: 700, borderRadius: 1.5,
+                            bgcolor: alpha(req.requestType === 'TUTOR' ? theme.palette.info.main : theme.palette.secondary.main, 0.1),
+                            color: req.requestType === 'TUTOR' ? 'info.main' : 'secondary.main',
+                          }}
+                        />
+                        <Chip
+                          label="Pending"
+                          size="small"
+                          sx={{ fontWeight: 700, borderRadius: 1.5, bgcolor: alpha(theme.palette.warning.main, 0.1), color: 'warning.main' }}
+                        />
+                      </Box>
                     </Box>
 
                     <Divider sx={{ my: 1.5, borderStyle: 'dashed' }} />

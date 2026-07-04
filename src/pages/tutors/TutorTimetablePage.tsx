@@ -37,7 +37,8 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import { getMyClasses, updateFinalClassSchedule, getPendingCycleStarts, PendingCycleClass } from '../../services/finalClassService';
 import { IFinalClass, IClassSession } from '../../types';
-import { getMyTutorSessionsForCycle, rescheduleSession } from '../../services/classSessionService';
+import { getMyTutorSessionsForCycle } from '../../services/classSessionService';
+import { requestTutorReschedule } from '../../services/rescheduleRequestService';
 import ScheduleTestModal from '../../components/tutors/ScheduleTestModal';
 import CycleStartDialog from '../../components/tutors/CycleStartDialog';
 import { FINAL_CLASS_STATUS } from '../../constants';
@@ -325,9 +326,9 @@ const TutorTimetablePage: React.FC = () => {
   // ─── Reschedule state ────────────────────────────────
   const [rescheduleSession_, setRescheduleSession] = useState<IClassSession | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
-  const [rescheduleTime, setRescheduleTime] = useState('');
   const [rescheduleSaving, setRescheduleSaving] = useState(false);
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [rescheduleSubmitted, setRescheduleSubmitted] = useState(false);
 
   // ─── Mobile week state ───────────────────────
   const [mobileWeekStart, setMobileWeekStart] = useState<Date>(() => {
@@ -719,24 +720,20 @@ const TutorTimetablePage: React.FC = () => {
     setRescheduleSaving(true);
     setRescheduleError(null);
     try {
-      const slotParts = rescheduleSession_.timeSlot?.split(' - ');
-      const origEnd = slotParts?.[1]?.trim() || '';
-      const newTimeSlot = rescheduleTime && origEnd ? `${rescheduleTime} - ${origEnd}` : undefined;
-      await rescheduleSession({ sessionId: rescheduleSession_.id, newDate: new Date(rescheduleDate).toISOString(), newTimeSlot });
-      // Update cycleSessions in place
-      setCycleSessions((prev) =>
-        prev.map((s) =>
-          s.id === rescheduleSession_!.id
-            ? { ...s, sessionDate: new Date(rescheduleDate).toISOString(), ...(newTimeSlot ? { timeSlot: newTimeSlot } : {}) }
-            : s
-        )
-      );
-      setRescheduleSession(null);
+      await requestTutorReschedule(rescheduleSession_.id, new Date(rescheduleDate).toISOString());
+      setRescheduleSubmitted(true);
     } catch (e: any) {
-      setRescheduleError(e?.response?.data?.message || 'Failed to reschedule session.');
+      setRescheduleError(e?.response?.data?.message || 'Failed to submit reschedule request.');
     } finally {
       setRescheduleSaving(false);
     }
+  };
+
+  const handleRescheduleClose = () => {
+    setRescheduleSession(null);
+    setRescheduleDate('');
+    setRescheduleError(null);
+    setRescheduleSubmitted(false);
   };
 
   const monthDays = useMemo(() => {
@@ -1733,7 +1730,7 @@ const TutorTimetablePage: React.FC = () => {
       {/* ─── Reschedule Session Dialog ──────────────────── */}
       <Dialog
         open={!!rescheduleSession_}
-        onClose={() => !rescheduleSaving && setRescheduleSession(null)}
+        onClose={() => !rescheduleSaving && handleRescheduleClose()}
         fullWidth
         maxWidth="xs"
         PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
@@ -1744,7 +1741,9 @@ const TutorTimetablePage: React.FC = () => {
               <TodayIcon sx={{ fontSize: 20, color: '#fbbf24' }} />
             </Box>
             <Box>
-              <Typography fontWeight={900} sx={{ fontSize: '1.1rem' }}>Reschedule Session</Typography>
+              <Typography fontWeight={900} sx={{ fontSize: '1.1rem' }}>
+                {rescheduleSubmitted ? 'Request Sent' : 'Request Reschedule'}
+              </Typography>
               {rescheduleSession_ && (
                 <Typography variant="caption" sx={{ color: alpha('#fff', 0.55), fontWeight: 600 }}>
                   {rescheduleSession_.finalClass?.studentName} · #{rescheduleSession_.sessionNumber}
@@ -1755,59 +1754,58 @@ const TutorTimetablePage: React.FC = () => {
         </DialogTitle>
 
         <DialogContent sx={{ pt: 3, px: 3.5, bgcolor: '#fff' }}>
-          {rescheduleError && (
-            <Box mb={2} p={1.5} borderRadius={1.5} bgcolor={alpha('#ef4444', 0.05)}>
-              <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800 }}>{rescheduleError}</Typography>
-            </Box>
-          )}
-
-          {rescheduleSession_ && (
-            <Box mb={2.5} p={1.5} borderRadius={1.5} bgcolor={alpha('#f8fafc', 1)} display="flex" alignItems="center" gap={1}>
-              <SchoolIcon sx={{ fontSize: 16, color: '#64748b' }} />
-              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>
-                Current:{' '}
-                <strong style={{ color: '#1e293b' }}>
-                  {new Date(rescheduleSession_.sessionDate).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                  {rescheduleSession_.timeSlot ? ` · ${rescheduleSession_.timeSlot}` : ''}
-                </strong>
+          {rescheduleSubmitted ? (
+            <Box textAlign="center" py={1}>
+              <Typography fontSize={40} mb={1}>✅</Typography>
+              <Typography fontWeight={800} mb={0.5}>Request submitted</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Your reschedule request is pending coordinator approval. The session date will only change once approved.
               </Typography>
             </Box>
+          ) : (
+            <>
+              {rescheduleError && (
+                <Box mb={2} p={1.5} borderRadius={1.5} bgcolor={alpha('#ef4444', 0.05)}>
+                  <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800 }}>{rescheduleError}</Typography>
+                </Box>
+              )}
+              {rescheduleSession_ && (
+                <Box mb={2.5} p={1.5} borderRadius={1.5} bgcolor={alpha('#f8fafc', 1)} display="flex" alignItems="center" gap={1}>
+                  <SchoolIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                  <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700 }}>
+                    Current:{' '}
+                    <strong style={{ color: '#1e293b' }}>
+                      {new Date(rescheduleSession_.sessionDate).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      {rescheduleSession_.timeSlot ? ` · ${rescheduleSession_.timeSlot}` : ''}
+                    </strong>
+                  </Typography>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#64748b', fontWeight: 800, letterSpacing: '0.05em' }}>NEW DATE</Typography>
+                <TextField
+                  fullWidth size="small" type="date"
+                  value={rescheduleDate}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  inputProps={{ min: new Date().toISOString().slice(0, 10) }}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, bgcolor: '#f8fafc', '& fieldset': { borderColor: alpha('#e2e8f0', 1) } } }}
+                />
+              </Box>
+            </>
           )}
-
-          <Box mb={2.5}>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#64748b', fontWeight: 800, letterSpacing: '0.05em' }}>NEW DATE</Typography>
-            <TextField
-              fullWidth size="small" type="date"
-              value={rescheduleDate}
-              onChange={(e) => setRescheduleDate(e.target.value)}
-              inputProps={{ min: new Date().toISOString().slice(0, 10) }}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, bgcolor: '#f8fafc', '& fieldset': { borderColor: alpha('#e2e8f0', 1) } } }}
-            />
-          </Box>
-
-          <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#64748b', fontWeight: 800, letterSpacing: '0.05em' }}>
-              NEW START TIME <Typography component="span" variant="caption" sx={{ fontWeight: 600, color: '#94a3b8' }}>(optional — keeps original if blank)</Typography>
-            </Typography>
-            <TextField
-              fullWidth size="small" type="time"
-              InputLabelProps={{ shrink: true }}
-              value={rescheduleTime}
-              onChange={(e) => setRescheduleTime(e.target.value)}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5, bgcolor: '#f8fafc', '& fieldset': { borderColor: alpha('#e2e8f0', 1) } } }}
-            />
-          </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3.5, pb: 3.5, pt: 1.5, bgcolor: '#fff' }}>
-          <Button onClick={() => setRescheduleSession(null)} disabled={rescheduleSaving}
+          <Button onClick={handleRescheduleClose} disabled={rescheduleSaving}
             sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 800, color: '#64748b', px: 2.5 }}>
-            Cancel
+            {rescheduleSubmitted ? 'Close' : 'Cancel'}
           </Button>
-          <Button variant="contained" onClick={handleRescheduleConfirm} disabled={rescheduleSaving || !rescheduleDate}
-            sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 900, bgcolor: '#f59e0b', boxShadow: 'none', px: 4, py: 1.1, '&:hover': { bgcolor: '#d97706' }, '&.Mui-disabled': { bgcolor: alpha('#f59e0b', 0.3) } }}>
-            {rescheduleSaving ? 'Saving…' : 'Confirm Reschedule'}
-          </Button>
+          {!rescheduleSubmitted && (
+            <Button variant="contained" onClick={handleRescheduleConfirm} disabled={rescheduleSaving || !rescheduleDate}
+              sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 900, bgcolor: '#f59e0b', boxShadow: 'none', px: 4, py: 1.1, '&:hover': { bgcolor: '#d97706' }, '&.Mui-disabled': { bgcolor: alpha('#f59e0b', 0.3) } }}>
+              {rescheduleSaving ? 'Sending…' : 'Send Request'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
