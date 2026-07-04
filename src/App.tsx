@@ -44,6 +44,7 @@ import PaymentTrackingPage from "./pages/coordinator/PaymentTrackingPage";
 import CoordinatorProfilePage from "./pages/coordinator/CoordinatorProfilePage";
 import ShiftRequestsPage from "./pages/coordinator/ShiftRequestsPage";
 import RescheduleRequestsPage from "./pages/coordinator/RescheduleRequestsPage";
+import TicketsPage from "./pages/coordinator/TicketsPage";
 import ClassRequestsPage from "./pages/manager/ClassRequestsPage";
 import CoordinatorAttendanceSheetTablePage from "./pages/coordinator/CoordinatorAttendanceSheetTablePage";
 import CoordinatorsPage from "./pages/manager/CoordinatorsPage";
@@ -418,6 +419,16 @@ const App: React.FC = () => {
                 }
               />
               <Route
+                path="tickets"
+                element={
+                  <ProtectedRoute
+                    allowedRoles={[USER_ROLES.COORDINATOR, USER_ROLES.ADMIN]}
+                  >
+                    <TicketsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="test-scheduling"
                 element={
                   <ProtectedRoute
@@ -601,6 +612,7 @@ const App: React.FC = () => {
                 <Route path="verify-manager/:id" element={<ManagerVerificationPage />} />
                 <Route path="notifications" element={<AdminNotificationsPage />} />
                 <Route path="banner-notifications" element={<Navigate to="/admin/notifications" replace />} />
+                <Route path="reschedule-requests" element={<RescheduleRequestsPage />} />
               </Route>
               <Route
                 path="class-requests"
