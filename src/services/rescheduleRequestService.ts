@@ -13,7 +13,12 @@ export interface IRescheduleRequest {
   timeSlot: string;
   requestedBy: string;
   requestedAt: string;
+  requestType: 'PARENT' | 'TUTOR';
 }
+
+export const requestTutorReschedule = async (sessionId: string, newDate: string): Promise<void> => {
+  await api.post(`/api/class-sessions/${sessionId}/reschedule-request`, { newDate });
+};
 
 export const getPendingRescheduleRequests = async (): Promise<{ data: IRescheduleRequest[]; count: number }> => {
   const { data } = await api.get('/api/coordinators/reschedule-requests');
