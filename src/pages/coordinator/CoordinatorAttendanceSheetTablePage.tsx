@@ -513,7 +513,7 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
       {/* Hidden off-screen render target for html2canvas/jsPDF export —
           same mechanism as AttendanceSheetReviewModal on /attendance-sheet-approvals */}
       {selectedSheet && (
-        <Box sx={{ position: 'absolute', top: -10000, left: -10000 }}>
+        <Box sx={{ position: 'absolute', top: -10000, left: -10000, pointerEvents: 'none', zIndex: -1 }}>
           <AttendanceSheet
             ref={attendanceSheetRef}
             tutorData={sheetTutorData}
