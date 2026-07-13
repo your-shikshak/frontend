@@ -399,42 +399,116 @@ const MyClassesCard: React.FC = () => {
     '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
   };
 
+  // Rendered regardless of loading/error/empty-active-list state below —
+  // a tutor with ZERO active classes but one PAUSED class must still see
+  // this (that early-return "No Active Classes" branch would otherwise
+  // never reach the Dialog defined further down in the main return).
+  const pausedModalNode = (
+    <Dialog
+      open={pausedModalOpen}
+      onClose={() => setPausedModalOpen(false)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <PauseCircleFilledIcon sx={{ color: '#f59e0b' }} />
+        Class Paused
+      </DialogTitle>
+      <DialogContent>
+        <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+          {pausedClasses.length === 1
+            ? 'Your class has been paused. Contact your class coordinator.'
+            : `${pausedClasses.length} of your classes have been paused. Contact your class coordinator.`}
+        </Alert>
+        <Box display="flex" flexDirection="column" gap={1.5}>
+          {pausedClasses.map((cls) => (
+            <Box
+              key={cls.id}
+              sx={{
+                border: '1px solid',
+                borderColor: alpha('#f59e0b', 0.25),
+                borderRadius: 1.5,
+                p: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+              }}
+            >
+              <Box>
+                <Typography variant="body2" fontWeight={700}>{cls.studentName}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Coordinator: {cls.coordinator?.name || 'N/A'}
+                </Typography>
+              </Box>
+              {cls.coordinator?.phone && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<LocalPhoneIcon sx={{ fontSize: 14 }} />}
+                  onClick={() => handleCallCoordinator(cls)}
+                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0 }}
+                >
+                  Call
+                </Button>
+              )}
+            </Box>
+          ))}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="contained" onClick={() => setPausedModalOpen(false)} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}>
+          Got it
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   if (loading) {
     return (
-      <Card sx={cardSx}>
-        <CardContent>
-          <Box display="flex" justifyContent="center" py={4}>
-            <LoadingSpinner message="Loading your classes..." />
-          </Box>
-        </CardContent>
-      </Card>
+      <>
+        <Card sx={cardSx}>
+          <CardContent>
+            <Box display="flex" justifyContent="center" py={4}>
+              <LoadingSpinner message="Loading your classes..." />
+            </Box>
+          </CardContent>
+        </Card>
+        {pausedModalNode}
+      </>
     );
   }
 
   if (error && classes.length === 0) {
     return (
-      <Card sx={cardSx}>
-        <CardContent>
-          <Box display="flex" flexDirection="column" gap={2}>
-            <ErrorAlert error={error} />
-            <Button variant="outlined" onClick={fetchClasses} sx={{ borderRadius: 2, textTransform: 'none' }}>Retry</Button>
-          </Box>
-        </CardContent>
-      </Card>
+      <>
+        <Card sx={cardSx}>
+          <CardContent>
+            <Box display="flex" flexDirection="column" gap={2}>
+              <ErrorAlert error={error} />
+              <Button variant="outlined" onClick={fetchClasses} sx={{ borderRadius: 2, textTransform: 'none' }}>Retry</Button>
+            </Box>
+          </CardContent>
+        </Card>
+        {pausedModalNode}
+      </>
     );
   }
 
   if (!loading && classes.length === 0) {
     return (
-      <Card sx={cardSx}>
-        <CardContent>
-          <EmptyState
-            icon={<ClassIcon color="primary" />}
-            title="No Active Classes"
-            description="You don't have any active classes assigned yet."
-          />
-        </CardContent>
-      </Card>
+      <>
+        <Card sx={cardSx}>
+          <CardContent>
+            <EmptyState
+              icon={<ClassIcon color="primary" />}
+              title="No Active Classes"
+              description="You don't have any active classes assigned yet."
+            />
+          </CardContent>
+        </Card>
+        {pausedModalNode}
+      </>
     );
   }
 
@@ -963,65 +1037,8 @@ const MyClassesCard: React.FC = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={pausedModalOpen}
-          onClose={() => setPausedModalOpen(false)}
-          maxWidth="xs"
-          fullWidth
-        >
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PauseCircleFilledIcon sx={{ color: '#f59e0b' }} />
-            Class Paused
-          </DialogTitle>
-          <DialogContent>
-            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
-              {pausedClasses.length === 1
-                ? 'Your class has been paused. Contact your class coordinator.'
-                : `${pausedClasses.length} of your classes have been paused. Contact your class coordinator.`}
-            </Alert>
-            <Box display="flex" flexDirection="column" gap={1.5}>
-              {pausedClasses.map((cls) => (
-                <Box
-                  key={cls.id}
-                  sx={{
-                    border: '1px solid',
-                    borderColor: alpha('#f59e0b', 0.25),
-                    borderRadius: 1.5,
-                    p: 1.5,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 1,
-                  }}
-                >
-                  <Box>
-                    <Typography variant="body2" fontWeight={700}>{cls.studentName}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Coordinator: {cls.coordinator?.name || 'N/A'}
-                    </Typography>
-                  </Box>
-                  {cls.coordinator?.phone && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<LocalPhoneIcon sx={{ fontSize: 14 }} />}
-                      onClick={() => handleCallCoordinator(cls)}
-                      sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0 }}
-                    >
-                      Call
-                    </Button>
-                  )}
-                </Box>
-              ))}
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button variant="contained" onClick={() => setPausedModalOpen(false)} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}>
-              Got it
-            </Button>
-          </DialogActions>
-        </Dialog>
       </CardContent>
+      {pausedModalNode}
     </Card>
   );
 };
