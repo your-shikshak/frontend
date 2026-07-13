@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -24,6 +24,7 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
 import { getClassSessionsForCycle } from '../../services/classSessionService';
 import MarkUpcomingAttendanceModal from '../../components/coordinator/MarkUpcomingAttendanceModal';
+import AttendanceSheet from '../../components/tutors/AttendanceSheet';
 
 
 type TabKey = 'upcoming' | 'completed';
@@ -97,6 +98,9 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
   const [markModalOpen, setMarkModalOpen] = useState(false);
   const [selectedSessionRow, setSelectedSessionRow] = useState<SessionRow | null>(null);
 
+  // Client-rendered PDF (html2canvas + jsPDF), same mechanism as
+  // AttendanceSheetReviewModal on /attendance-sheet-approvals
+  const attendanceSheetRef = useRef<{ exportPdf: () => Promise<void> }>(null);
 
   const coordinatorUserId = (user as any)?.id || (user as any)?._id;
 
@@ -164,6 +168,49 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
     if (!selectedSheetId) return null;
     return sheets.find((s) => String(s._id || s.id || '') === String(selectedSheetId)) || null;
   }, [sheets, selectedSheetId]);
+
+  // Same tutorData/classInfo shape AttendanceSheetReviewModal builds for the
+  // AttendanceSheet component, adapted to this page's data (selectedSheet's
+  // raw records + the selected class from `classes`).
+  const selectedClassForSheet = useMemo(
+    () => classes.find((c: any) => String(c.id || c._id) === String(selectedClassId)) || null,
+    [classes, selectedClassId]
+  );
+
+  const sheetTutorData = useMemo(() => {
+    const recs = Array.isArray(selectedSheet?.records) ? (selectedSheet!.records as any[]) : [];
+    return {
+      attendanceRecords: recs.map((r: any) => {
+        const dateObj = r.sessionDate ? new Date(r.sessionDate) : null;
+        const yyyyMmDd = dateObj
+          ? `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(
+            dateObj.getDate()
+          ).padStart(2, '0')}`
+          : '';
+        return {
+          classId: selectedClassId,
+          date: yyyyMmDd,
+          status: r.status || r.studentAttendanceStatus || '',
+          duration: typeof r.durationHours === 'number' ? r.durationHours : 1,
+          topicsCovered: r.topicCovered || undefined,
+          markedAt: r.submittedAt ? String(r.submittedAt) : r.createdAt ? String(r.createdAt) : '',
+        };
+      }),
+    };
+  }, [selectedSheet, selectedClassId]);
+
+  const sheetClassInfo = useMemo(() => {
+    const cls: any = selectedClassForSheet || {};
+    const subject = Array.isArray(cls.subject)
+      ? cls.subject.map((s: any) => (typeof s === 'string' ? s : s?.label || s?.name || 'N/A')).join(', ')
+      : String(cls.subject || '');
+    return {
+      classId: cls.className || selectedClassId,
+      studentName: cls.studentName || '',
+      subject,
+      tutorName: cls.tutor?.name || 'Tutor',
+    };
+  }, [selectedClassForSheet, selectedClassId]);
 
   useEffect(() => {
     const loadCycleSessions = async () => {
@@ -342,18 +389,8 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
   }, [selectedSheetId]);
 
   const handleExportPdf = async () => {
-    if (!selectedClassId) return;
-
-    const year = Number((selectedSheet as any)?.year || new Date().getFullYear());
-    const month = Number((selectedSheet as any)?.month || new Date().getMonth() + 1);
-    const from = new Date(year, month - 1, 1);
-    const to = new Date(year, month, 0);
-
-    const start = ymd(from);
-    const end = ymd(to);
-
-    const { downloadAttendancePdf } = await import('../../services/finalClassService');
-    await downloadAttendancePdf(selectedClassId, start, end);
+    if (!selectedClassId || !selectedSheet) return;
+    await attendanceSheetRef.current?.exportPdf();
   };
 
   const columns: GridColDef[] = useMemo(() => [
@@ -466,12 +503,25 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
               variant="contained"
               startIcon={<DownloadIcon />}
               onClick={handleExportPdf}
-              disabled={!selectedClassId}
+              disabled={!selectedClassId || !selectedSheet}
           >
-            Export PDF
+            Download Sheet
           </Button>
         </Stack>
       </Box>
+
+      {/* Hidden off-screen render target for html2canvas/jsPDF export —
+          same mechanism as AttendanceSheetReviewModal on /attendance-sheet-approvals */}
+      {selectedSheet && (
+        <Box sx={{ position: 'absolute', top: -10000, left: -10000 }}>
+          <AttendanceSheet
+            ref={attendanceSheetRef}
+            tutorData={sheetTutorData}
+            classInfo={sheetClassInfo}
+            sheetNo={selectedSheet.cycleNumber || 1}
+          />
+        </Box>
+      )}
 
       {selectedClassId && (
         <Box mb={2}>
