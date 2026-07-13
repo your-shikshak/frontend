@@ -84,7 +84,10 @@ const AttendanceSheetReviewModal: React.FC<AttendanceSheetReviewModalProps> = ({
     classId: sheet.finalClass?.className || sheet._id,
     studentName: sheet.finalClass?.studentName || '',
     subject: getLeafSubjectLabel(sheet.finalClass?.subject),
-    tutorName: sheet.tutor?.name || 'Tutor',
+    // AttendanceSheet has no top-level `tutor` field — `sheet.tutor` was
+    // always undefined, silently falling back to the literal "Tutor".
+    // The real tutor lives on the populated finalClass/groupClass.
+    tutorName: sheet.finalClass?.tutor?.name || sheet.groupClass?.tutor?.name || 'Tutor',
   };
 
   const handleApprove = async (shouldRenew: boolean = false) => {
