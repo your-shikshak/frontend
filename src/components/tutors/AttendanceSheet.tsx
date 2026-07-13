@@ -127,13 +127,22 @@ const AttendanceSheet = forwardRef(function AttendanceSheet(
     today.getMonth() + 1
   ).padStart(2, '0')} / ${today.getFullYear()}`;
 
+  // Grand total across the WHOLE cycle (all records, not just the current
+  // printed page's chunk) — a cycle with >rowsPerPage records spans
+  // multiple physical pages, and each page's footer should show the same
+  // correct cycle total, not a partial per-page subtotal.
+  const cycleTotalMinutes = records.reduce((sum, r) => sum + (r.duration || 0) * 60, 0);
+  const cycleTotalHours = cycleTotalMinutes / 60;
+  const cycleTotalHoursDisplay = cycleTotalHours ? cycleTotalHours.toFixed(1) : '0.0';
+
   return (
     <Box ref={containerRef} sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {chunks.map((chunk, chunkIndex) => {
-        const currentSheetNo = sheetNo + chunkIndex;
-        const totalMinutes = chunk.reduce((sum, r) => sum + (r.duration || 0) * 60, 0);
-        const totalHours = totalMinutes / 60;
-        const totalHoursDisplay = totalHours ? totalHours.toFixed(1) : '0.0';
+        // `sheetNo` identifies the CYCLE and must stay fixed across every
+        // physical page of that cycle — it must not increment per page
+        // (that's what "Page X of Y" below is for).
+        const currentSheetNo = sheetNo;
+        const totalHoursDisplay = cycleTotalHoursDisplay;
 
         return (
           <Box
@@ -257,7 +266,12 @@ const AttendanceSheet = forwardRef(function AttendanceSheet(
               </Box>
               <Box sx={{ flex: '1 1 45%', minWidth: '300px' }}>
                 <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>
-                  <strong>Sheet No:</strong> {currentSheetNo}
+                  <strong>Cycle Number:</strong> {currentSheetNo}
+                  {chunks.length > 1 && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                      (Page {chunkIndex + 1} of {chunks.length})
+                    </Typography>
+                  )}
                 </Typography>
               </Box>
               <Box sx={{ flex: '1 1 45%', minWidth: '300px' }}>
@@ -390,7 +404,7 @@ const AttendanceSheet = forwardRef(function AttendanceSheet(
                 pb: 2
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>Total Teaching Hours: {totalHoursDisplay} hrs</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>Total Teaching Hours (Cycle {currentSheetNo}): {totalHoursDisplay} hrs</Typography>
               <Typography variant="body2">
                 Tutor’s Remarks (if any): __________________________________________________________________
               </Typography>
