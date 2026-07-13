@@ -91,7 +91,17 @@ const AttendanceSheet = forwardRef(function AttendanceSheet(
         scale: 2, // Higher quality
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        // Force capture to always evaluate CSS as a desktop-width viewport,
+        // regardless of the real window width. .physical-sheet has a
+        // `@media (max-width: 800px)` rule (zoom + translateX(-50%)) for
+        // in-modal mobile display — html2canvas renders zoom/transform
+        // unreliably, producing a clipped/shifted capture whenever the
+        // real window happens to be narrow at export time. Without this,
+        // export correctness depends on the browser window's width, which
+        // has nothing to do with the sheet itself.
+        windowWidth: 1200,
+        windowHeight: element.scrollHeight,
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
