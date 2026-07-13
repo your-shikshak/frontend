@@ -27,6 +27,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import LocalPhoneIcon from '@mui/icons-material/LocalPhone';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import ClassIcon from '@mui/icons-material/Class';
+import PauseCircleFilledIcon from '@mui/icons-material/PauseCircleFilled';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import SendIcon from '@mui/icons-material/Send';
 import { useNavigate } from 'react-router-dom';
@@ -83,6 +84,9 @@ const MyClassesCard: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<IFinalClass | null>(null);
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  const [pausedClasses, setPausedClasses] = useState<IFinalClass[]>([]);
+  const [pausedModalOpen, setPausedModalOpen] = useState(false);
 
   const [attendanceMonthByClassId, setAttendanceMonthByClassId] = useState<Record<string, string>>({});
   const [sheetSubmittingClassId, setSheetSubmittingClassId] = useState<string | null>(null);
@@ -209,6 +213,21 @@ const MyClassesCard: React.FC = () => {
     }
   };
 
+  const checkPausedClasses = async () => {
+    try {
+      const tutorId = (user as any)?.id || (user as any)?._id;
+      if (!tutorId) return;
+      const res = await getMyClasses(tutorId, FINAL_CLASS_STATUS.PAUSED);
+      const paused = res.data || [];
+      setPausedClasses(paused);
+      if (paused.length > 0) {
+        setPausedModalOpen(true);
+      }
+    } catch {
+      // non-fatal: don't block the page if this secondary check fails
+    }
+  };
+
   const fetchNewLeadsCount = async () => {
     try {
       const resp = await getMyTutorLeads();
@@ -225,6 +244,8 @@ const MyClassesCard: React.FC = () => {
   useEffect(() => {
     fetchClasses();
     fetchNewLeadsCount();
+    checkPausedClasses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -939,6 +960,65 @@ const MyClassesCard: React.FC = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setReportOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={pausedModalOpen}
+          onClose={() => setPausedModalOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PauseCircleFilledIcon sx={{ color: '#f59e0b' }} />
+            Class Paused
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+              {pausedClasses.length === 1
+                ? 'Your class has been paused. Contact your class coordinator.'
+                : `${pausedClasses.length} of your classes have been paused. Contact your class coordinator.`}
+            </Alert>
+            <Box display="flex" flexDirection="column" gap={1.5}>
+              {pausedClasses.map((cls) => (
+                <Box
+                  key={cls.id}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: alpha('#f59e0b', 0.25),
+                    borderRadius: 1.5,
+                    p: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>{cls.studentName}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Coordinator: {cls.coordinator?.name || 'N/A'}
+                    </Typography>
+                  </Box>
+                  {cls.coordinator?.phone && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<LocalPhoneIcon sx={{ fontSize: 14 }} />}
+                      onClick={() => handleCallCoordinator(cls)}
+                      sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0 }}
+                    >
+                      Call
+                    </Button>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button variant="contained" onClick={() => setPausedModalOpen(false)} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}>
+              Got it
+            </Button>
           </DialogActions>
         </Dialog>
       </CardContent>
