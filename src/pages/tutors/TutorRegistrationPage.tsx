@@ -42,7 +42,18 @@ const TutorLeadRegistration = () => {
       setLoading(true);
       try {
         const resp = await getMyProfileForEdit();
-        setInitialData((resp.data || resp) as TutorLeadFormData);
+        const data = (resp.data || resp) as TutorLeadFormData;
+        // getMyProfileForEdit populates `subjects` as full Option objects
+        // ({_id, label, value, type}), but the form (and its curriculum
+        // picker) treats formData.subjects as an array of plain ID strings
+        // everywhere else -- rendering a populated object directly as a
+        // Chip label throws "Objects are not valid as a React child" and
+        // crashes the Professional step for any tutor with subjects
+        // assigned. Normalize to ID strings here, once, at the source.
+        const normalizedSubjects = (data.subjects || [])
+          .map((s: any) => (typeof s === 'string' ? s : s?._id || s?.id))
+          .filter(Boolean);
+        setInitialData({ ...data, subjects: normalizedSubjects });
       } catch {
         toast.error('Failed to load profile data');
       } finally {
