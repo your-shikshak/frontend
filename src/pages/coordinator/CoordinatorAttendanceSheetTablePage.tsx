@@ -22,7 +22,7 @@ import PaymentStatusChip from '../../components/payments/PaymentStatusChip';
 import ErrorAlert from '../../components/common/ErrorAlert';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import api from '../../services/api';
-import { getClassSessionsForCycle } from '../../services/classSessionService';
+import { getClassSessionsForCycleNumber } from '../../services/classSessionService';
 import MarkUpcomingAttendanceModal from '../../components/coordinator/MarkUpcomingAttendanceModal';
 import AttendanceSheet from '../../components/tutors/AttendanceSheet';
 
@@ -47,7 +47,7 @@ type AttendanceSheetLite = {
 
 type SessionRow = {
   id: string;
-  type: 'UPCOMING' | 'COMPLETED';
+  type: 'UPCOMING' | 'COMPLETED' | 'MISSED';
   classId: string;
   className: string;
   studentName: string;
@@ -214,34 +214,25 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
 
   useEffect(() => {
     const loadCycleSessions = async () => {
-      if (!coordinatorUserId || (!selectedSheet && sheets.length > 0)) {
+      if (!coordinatorUserId || !selectedClassId || !selectedSheet) {
         setCycleSessions([]);
         return;
       }
-      
-      let month: number;
-      let year: number;
-      
-      if (selectedSheet) {
-        month = Number((selectedSheet as any).month || 0);
-        year = Number((selectedSheet as any).year || 0);
-      } else {
-        const now = new Date();
-        month = now.getMonth() + 1;
-        year = now.getFullYear();
-      }
-      
-      if (!month || !year) {
+
+      const cycleNumber = Number((selectedSheet as any).cycleNumber || 0);
+      if (!cycleNumber) {
         setCycleSessions([]);
         return;
       }
 
       try {
-        const resp = await getClassSessionsForCycle({ 
-          classId: selectedClassId, 
-          month, 
-          year, 
-          ensure: true 
+        // Cycle-scoped, not calendar-month-scoped: a cycle regularly spans
+        // two calendar months, and this also surfaces MISSED sessions
+        // (unmarked sessions from a cycle that has since closed) so
+        // coordinators can retroactively log them.
+        const resp = await getClassSessionsForCycleNumber({
+          classId: selectedClassId,
+          cycleNumber,
         });
         setCycleSessions(Array.isArray(resp.data) ? resp.data : []);
       } catch {
@@ -250,17 +241,7 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
     };
 
     void loadCycleSessions();
-  }, [coordinatorUserId, selectedSheet, sheets.length]);
-
-  const monthlyLimitForSelectedClass = useMemo(() => {
-    if (!selectedClassId) return 0;
-    const cls = classes.find((c: any) => String(c.id || c._id) === String(selectedClassId));
-    const sheetLimit = Number((selectedSheet as any)?.totalSessionsPlanned || 0);
-    if (Number.isFinite(sheetLimit) && sheetLimit > 0) return sheetLimit;
-    const nRaw = (cls as any)?.classesPerMonth ?? 0;
-    const n = Number(nRaw);
-    return Number.isFinite(n) && n > 0 ? n : 0;
-  }, [classes, selectedClassId, selectedSheet]);
+  }, [coordinatorUserId, selectedClassId, selectedSheet]);
 
   const completedForSelectedCycle = useMemo(() => {
     if (!selectedClassId || !selectedSheet) return [] as SessionRow[];
@@ -290,19 +271,13 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
   }, [classes, selectedClassId, selectedSheet, selectedSheetId]);
 
   const upcomingForSelectedCycle = useMemo(() => {
-    if (!selectedClassId || (!selectedSheet && sheets.length > 0)) return [] as SessionRow[];
+    if (!selectedClassId || !selectedSheet) return [] as SessionRow[];
 
     const cls = classes.find((c: any) => String(c.id || c._id) === String(selectedClassId));
     if (!cls) return [];
 
-    const remaining = monthlyLimitForSelectedClass > 0
-        ? Math.max(0, monthlyLimitForSelectedClass - completedForSelectedCycle.length)
-        : 9999;
-
-    if (remaining <= 0) return [];
-
-    const subject = Array.isArray((cls as any).subject) 
-      ? (cls as any).subject.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || 'N/A').join(', ') 
+    const subject = Array.isArray((cls as any).subject)
+      ? (cls as any).subject.map((s: any) => typeof s === 'string' ? s : s?.label || s?.name || 'N/A').join(', ')
       : String((cls as any).subject || '');
 
     const completedKeySet = new Set<string>();
@@ -310,8 +285,14 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
       completedKeySet.add(`${r.classId}::${formatDate(r.sessionDateTimeIso)}`);
     });
 
-    const plannedForClass = (cycleSessions || [])
+    // cycleSessions is already scoped to exactly this cycle (via
+    // getClassSessionsForCycleNumber), so no count-based cap is needed here
+    // — every PLANNED/MISSED session in the cycle that hasn't been marked
+    // yet belongs on this list, whether it's still upcoming or a past miss.
+    const actionableForClass = (cycleSessions || [])
       .filter((s: any) => {
+        const status = String(s?.status || '');
+        if (status !== 'PLANNED' && status !== 'MISSED') return false;
         const fc = s?.finalClass;
         const gc = s?.groupClass;
         const fcId = String(fc?.id || fc?._id || '');
@@ -321,29 +302,30 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
       .map((s: any) => {
         const d = new Date(s.sessionDate);
         if (Number.isNaN(d.getTime())) return null;
-        
-        // Use the populated class data from the session if available, 
+
+        // Use the populated class data from the session if available,
         // fallback to the 'cls' from the dropdown list
         const classData = s.finalClass || s.groupClass || cls;
-        
+
         return {
           sessionDateTimeIso: d.toISOString(),
           dateKey: ymd(d),
           timeSlot: String(s.timeSlot || (classData as any)?.schedule?.timeSlot || ''),
           classData,
+          status: String(s.status || 'PLANNED'),
         };
       })
-      .filter(Boolean) as Array<{ sessionDateTimeIso: string; dateKey: string; timeSlot: string, classData: any }>;
+      .filter(Boolean) as Array<{ sessionDateTimeIso: string; dateKey: string; timeSlot: string; classData: any; status: string }>;
 
-    plannedForClass.sort((a, b) => a.sessionDateTimeIso.localeCompare(b.sessionDateTimeIso));
+    actionableForClass.sort((a, b) => a.sessionDateTimeIso.localeCompare(b.sessionDateTimeIso));
 
     const rows: SessionRow[] = [];
-    for (const p of plannedForClass) {
+    for (const p of actionableForClass) {
       if (completedKeySet.has(`${selectedClassId}::${p.dateKey}`)) continue;
 
       rows.push({
         id: `${selectedClassId}::${p.dateKey}`,
-        type: 'UPCOMING',
+        type: p.status === 'MISSED' ? 'MISSED' : 'UPCOMING',
         classId: selectedClassId,
         className: String((cls as any).className || ''),
         studentName: String((cls as any).studentName || ''),
@@ -353,12 +335,10 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
         payoutStatus: null,
         finalClass: p.classData,
       });
-
-      if (rows.length >= remaining) break;
     }
 
     return rows;
-  }, [classes, selectedClassId, selectedSheet, sheets.length, monthlyLimitForSelectedClass, completedForSelectedCycle, cycleSessions]);
+  }, [classes, selectedClassId, selectedSheet, completedForSelectedCycle, cycleSessions]);
 
   const visibleRows = tab === 'upcoming' ? upcomingForSelectedCycle : completedForSelectedCycle;
 
@@ -414,8 +394,9 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
       flex: 0.8,
       renderCell: (params) => {
           const row = params.row as SessionRow;
+          const color = row.type === 'MISSED' ? 'error.main' : row.type === 'UPCOMING' ? 'info.main' : 'success.main';
           return (
-              <Typography variant="body2" color={row.type === 'UPCOMING' ? 'info.main' : 'success.main'}>
+              <Typography variant="body2" color={color} fontWeight={row.type === 'MISSED' ? 700 : 400}>
                   {row.type}
               </Typography>
         );
@@ -428,7 +409,7 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
       sortable: false,
       renderCell: (params) => {
         const row = params.row as SessionRow;
-        if (row.type !== 'UPCOMING') return null;
+        if (row.type === 'COMPLETED') return null;
         return (
           <Button
             size="small"
@@ -551,7 +532,7 @@ const CoordinatorAttendanceSheetTablePage: React.FC = () => {
             sx={{ px: 2, pt: 1 }}
         >
           <Tab value="completed" label={`Completed (${completedForSelectedCycle.length})`} />
-          <Tab value="upcoming" label={`Upcoming (${upcomingForSelectedCycle.length})`} />
+          <Tab value="upcoming" label={`Upcoming / Missed (${upcomingForSelectedCycle.length})`} />
         </Tabs>
 
         <Box sx={{ height: 560, width: '100%' }}>

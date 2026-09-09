@@ -44,6 +44,18 @@ export const getClassSessionsForCycle = async (params: {
   return data as ApiResponse<IClassSession[]>;
 };
 
+// Cycle-scoped fetch — returns every session belonging to one cycle
+// regardless of how many calendar months it spans, PLANNED and MISSED
+// included. Prefer this over getClassSessionsForCycle (single-month) when
+// showing a specific cycle's schedule/attendance status.
+export const getClassSessionsForCycleNumber = async (params: {
+  classId: string;
+  cycleNumber: number;
+}): Promise<ApiResponse<IClassSession[]>> => {
+  const { data } = await api.get(`/api/class-sessions/class/${params.classId}/cycle/${params.cycleNumber}`);
+  return data as ApiResponse<IClassSession[]>;
+};
+
 export const rescheduleSession = async (params: {
   sessionId: string;
   newDate: string;       // ISO date string
@@ -60,5 +72,6 @@ export default {
   getMyTutorSessionsForCycle,
   getCoordinatorSessionsForCycle,
   getClassSessionsForCycle,
+  getClassSessionsForCycleNumber,
   rescheduleSession,
 };
