@@ -251,7 +251,7 @@ export interface IClassSession {
   cycleMonth: number;
   cycleYear: number;
   sessionNumber: number;
-  status: 'PLANNED' | 'COMPLETED' | 'CANCELLED' | string;
+  status: 'PLANNED' | 'COMPLETED' | 'CANCELLED' | 'MISSED' | string;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
